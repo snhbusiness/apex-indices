@@ -192,8 +192,8 @@ a{color:var(--gold);text-decoration:none}
     <button class="nav" data-v="catalysts"><i></i>Catalyseurs <span class="tag">IA</span></button>
     <div class="navgrp">Données</div>
     <button class="nav" data-v="calendar"><i></i>Calendrier</button>
-    <button class="nav" data-v="breadth"><i></i>Breadth <span class="tag">v2</span></button>
-    <button class="nav" data-v="sectors"><i></i>Secteurs <span class="tag">v2</span></button>
+    <button class="nav" data-v="breadth"><i></i>Breadth</button>
+    <button class="nav" data-v="sectors"><i></i>Secteurs</button>
     <div class="navgrp">Desk</div>
     <button class="nav" data-v="journal"><i></i>Journal</button>
     <button class="nav" data-v="settings"><i></i>Paramètres</button>
@@ -263,113 +263,48 @@ const STRUCTURE={
   }
 };
 
-/* ---------- DEMO : fallback si aucune donnée live (graceful degradation) ---------- */
-const DEMO_STATE={
-  generated_at:new Date().toISOString(), demo:true,
-  freshness:{us_close:'demo',asia:'demo',futures:'demo'},
-  regime:{risk:'risk-off',vix:19.4,vix_term:'backwardation',hy_oas:3.8,rsp_spy:'divergence négative',score:-2},
-  overnight:{
-    us_close:[{sym:'S&P 500',chg:-0.8},{sym:'Nasdaq 100',chg:-1.2},{sym:'Dow',chg:-0.4}],
-    asia:[{sym:'Nikkei',chg:-1.5},{sym:'Hang Seng',chg:0.3}],
-    futures:[{sym:'ES (S&P)',chg:-0.4},{sym:'NQ (Nasdaq)',chg:-0.6},{sym:'YM (Dow)',chg:-0.3},{sym:'DAX (cash)',chg:-0.6},{sym:'CAC (cash)',chg:-0.5}]
-  },
-  backdrop:{us10y:4.68,real_10y:2.07,curve_2s10s:0.12,dxy:104.2,oil:110.3},
-  calendar_today:[{time:'14:30',event:'CPI US',impact:'high'},{time:'20:00',event:'Discours Fed',impact:'med'}],
-  earnings_today:['Nvidia (après clôture US)'],
-  news_top:['—']
-};
-const DEMO_CATALYSTS=[{
-  headline:'Airbus signe un contrat majeur de livraison long-courriers',
-  entity:'Airbus',type:'contract',surprise:'high',horizon:'days',conviction:3,
-  direct_impact:{Airbus:'+ direct (carnet de commandes)',Safran:'+ fournisseur moteurs',Boeing:'- concurrent'},
-  index_transmission:{CAC40:'poids ~7% → impact modéré positif',SX5E:'contribution positive secteur aéro'},
-  liquidity:'contrat en USD → flux ; upgrades analystes probables ; surveiller open interest options Airbus/Safran',
-  scenarios:{bull:'cassure des plus hauts, Safran suit, secteur défense entraîné',base:'gap +1-2% à l\'ouverture puis consolidation',bear:'rumeur déjà pricée, fade dans la journée',invalidation:'détail du carnet décevant ou annulation antérieure non dite'},
-  watch:['réaction Safran à l\'ouverture','Boeing en pré-market US'],sources:['démo']
-},{
-  headline:'Pernod Ricard accélère sa stratégie sans-alcool',
-  entity:'Pernod Ricard',type:'policy',surprise:'med',horizon:'structural',conviction:2,
-  direct_impact:{'Pernod Ricard':'~ neutre court terme, re-rating lent',Diageo:'~ même tendance sectorielle',Campari:'~ exposé thème'},
-  index_transmission:{CAC40:'impact marginal court terme, signal thématique secteur spiritueux'},
-  liquidity:'pas de choc de liquidité immédiat ; flux thématiques ESG/santé sur semaines',
-  scenarios:{bull:'le marché valorise le repositionnement croissance',base:'thème de fond, peu d\'effet séance',bear:'lecture comme aveu de faiblesse sur le cœur de métier',invalidation:'volumes spiritueux classiques rebondissent'},
-  watch:['réaction Diageo','notes analystes secteur'],sources:['démo']
-}];
-
-/* ---------- DATA LAYER : cascade par catégorie ----------
-   Chaque fetch est isolé et tombe en fallback DEMO si échec/clé absente. */
+/* ---------- DATA LAYER : tout vient du proxy (vraies données ou rien) ---------- */
 async function jget(url,opt){const r=await fetch(url,opt);if(!r.ok)throw new Error(r.status);return r.json();}
 
-async function fredSeries(id,key){ // dernière obs
-  const u=`https://api.stlouisfed.org/fred/series/observations?series_id=${id}&api_key=${key}&file_type=json&sort_order=desc&limit=1`;
-  const d=await jget(u); return parseFloat(d.observations[0].value);
-}
-async function finnhubQuote(sym,key){
-  const d=await jget(`https://finnhub.io/api/v1/quote?symbol=${sym}&token=${key}`);
-  return {price:d.c,chg:d.dp}; // dp = % change
-}
-/* FMP : batch quote (indices ^, futures US ...USD, ETF). 1 seul appel. */
-async function fmpQuotes(syms,key){
-  const u=`https://financialmodelingprep.com/api/v3/quote/${syms.map(encodeURIComponent).join(',')}?apikey=${key}`;
-  const arr=await jget(u);
-  const m={}; (arr||[]).forEach(q=>m[q.symbol]={price:q.price,chg:q.changesPercentage});
-  return m; // m['^GSPC'].chg, m['ESUSD'].chg, ...
-}
-
 async function buildMarketState(){
-  const k=CFG.keys();
-  if(!k.fred && !k.finnhub && !k.fmp) return {...DEMO_STATE};
-  const st=JSON.parse(JSON.stringify(DEMO_STATE)); st.demo=false; st.generated_at=new Date().toISOString();
-  st.freshness={};
-  // backdrop via FRED (source de vérité)
-  if(k.fred){ try{
-    const [t10,r10,t2]=await Promise.all([fredSeries('DGS10',k.fred),fredSeries('DFII10',k.fred),fredSeries('DGS2',k.fred)]);
-    st.backdrop.us10y=t10; st.backdrop.real_10y=r10; st.backdrop.curve_2s10s=+(t10-t2).toFixed(2);
-    st.freshness.rates='live';
-  }catch(e){st.freshness.rates='fallback'} }
-  // marché via FMP : 1 appel batché — cash US/Asie, FUTURES US, cash EU, VIX, breadth
-  let done=false;
-  if(k.fmp){ try{
-    const q=await fmpQuotes(['^GSPC','^IXIC','^DJI','^N225','^HSI','ESUSD','NQUSD','YMUSD','^GDAXI','^FCHI','^VIX','RSP','SPY'],k.fmp);
-    const c=(s,fb)=>q[s]&&q[s].chg!=null?+q[s].chg.toFixed(2):fb;
-    st.overnight.us_close=[{sym:'S&P 500',chg:c('^GSPC',null)},{sym:'Nasdaq 100',chg:c('^IXIC',null)},{sym:'Dow',chg:c('^DJI',null)}];
-    st.overnight.asia=[{sym:'Nikkei',chg:c('^N225',null)},{sym:'Hang Seng',chg:c('^HSI',null)}];
-    // futures US (overnight) + cash EU en proxy d'ouverture (pas de futures Eurex gratuits)
-    st.overnight.futures=[
-      {sym:'ES (S&P)',chg:c('ESUSD',null)},{sym:'NQ (Nasdaq)',chg:c('NQUSD',null)},{sym:'YM (Dow)',chg:c('YMUSD',null)},
-      {sym:'DAX (cash)',chg:c('^GDAXI',null)},{sym:'CAC (cash)',chg:c('^FCHI',null)}
-    ].filter(x=>x.chg!=null);
-    if(q['^VIX']&&q['^VIX'].price) st.regime.vix=+q['^VIX'].price.toFixed(1);
-    if(q['RSP']&&q['SPY']) st.regime.rsp_spy=(q['RSP'].chg<q['SPY'].chg)?'divergence négative (étroit)':'breadth saine';
-    st.freshness.indices='live'; st.freshness.futures='live'; done=true;
-  }catch(e){st.freshness.indices='fallback'} }
-  // repli Finnhub si pas de FMP (cash US via proxies ETF, futures restent en démo)
-  if(!done && k.finnhub){ try{
-    const map=[['SPY','S&P 500'],['QQQ','Nasdaq 100'],['DIA','Dow']];
-    const fq=await Promise.all(map.map(m=>finnhubQuote(m[0],k.finnhub)));
-    st.overnight.us_close=map.map((m,i)=>({sym:m[1],chg:fq[i].chg}));
-    const vix=await finnhubQuote('^VIX',k.finnhub); if(vix.price) st.regime.vix=+vix.price.toFixed(1);
-    const [rsp,spy]=await Promise.all([finnhubQuote('RSP',k.finnhub),finnhubQuote('SPY',k.finnhub)]);
-    st.regime.rsp_spy=(rsp.chg<spy.chg)?'divergence négative (étroit)':'breadth saine';
-    st.freshness.indices='live'; st.freshness.futures='fallback (futures US requièrent FMP)';
-  }catch(e){st.freshness.indices='fallback'} }
-  st.regime.score=scoreRegime(st);
-  return st;
+  const proxy=CFG.get('proxy').replace(/\/$/,'');
+  if(!proxy) return {error:'no-proxy'};
+  try{
+    const st=await jget(proxy+'/api/market_state');
+    st.regime=st.regime||{}; st.overnight=st.overnight||{us_close:[],asia:[],futures:[]};
+    st.backdrop=st.backdrop||{}; st.calendar_today=st.calendar_today||[]; st.earnings_today=st.earnings_today||[];
+    return st;
+  }catch(e){ return {error:e.message||'fetch'}; }
 }
 
-/* règle de scoring régime — déterministe, jamais l'IA */
-function scoreRegime(s){
-  let sc=0;
-  if(s.regime.vix<16)sc+=2; else if(s.regime.vix<20)sc+=0; else if(s.regime.vix<26)sc-=1; else sc-=2;
-  if(s.regime.vix_term==='backwardation')sc-=1; else sc+=1;
-  if(s.regime.hy_oas<3.5)sc+=1; else if(s.regime.hy_oas>4.5)sc-=1;
-  if((s.regime.rsp_spy||'').includes('négative'))sc-=1;
-  const fut=(s.overnight.futures||[]).reduce((a,b)=>a+(b.chg||0),0);
-  if(fut>0.4)sc+=1; else if(fut<-0.4)sc-=1;
-  return Math.max(-3,Math.min(3,sc));
+/* ---------- SECTEURS & BREADTH (données fournies par le proxy) ---------- */
+let SB=null; // cache module
+async function fetchSectorBreadth(){
+  const proxy=CFG.get('proxy').replace(/\/$/,'');
+  if(!proxy) return {error:'no-proxy'};
+  try{ return await jget(proxy+'/api/sector_breadth'); }
+  catch(e){ return {error:e.message||'fetch'}; }
+}
+/* verdict breadth déterministe */
+function breadthVerdict(sb){
+  let narrow=0,wide=0;
+  if(sb.rsp!=null&&sb.spy!=null){(sb.rsp<sb.spy)?narrow++:wide++;}
+  if(sb.iwm!=null&&sb.spy!=null){(sb.iwm<sb.spy)?narrow++:wide++;}
+  const green=sb.sectors.filter(s=>s.chg>0).length, tot=sb.sectors.length;
+  (green>=tot*0.6)?wide++:(green<=tot*0.4?narrow++:0);
+  if(sb.mag7!=null&&sb.spy!=null&&sb.mag7>sb.spy+0.3)narrow++;
+  if(narrow>wide) return {label:'étroite',cls:'down',txt:`Marché porté par peu de valeurs (méga-caps). ${green}/${tot} secteurs en hausse, équipondéré en retard. Hausse fragile.`};
+  if(wide>narrow) return {label:'saine / large',cls:'up',txt:`Participation large. ${green}/${tot} secteurs en hausse, équipondéré et small caps suivent. Mouvement solide.`};
+  return {label:'mitigée',cls:'',txt:`Signaux contrastés. ${green}/${tot} secteurs en hausse. Pas de tendance de breadth nette.`};
+}
+function riskRotation(sb){
+  const avg=g=>{const a=sb.sectors.filter(s=>s.grp===g).map(s=>s.chg);return a.length?a.reduce((x,y)=>x+y,0)/a.length:0;};
+  const offcyc=(avg('off')+avg('cyc'))/2, def=avg('def');
+  if(offcyc>def+0.15) return {label:'risk-on',cls:'up',txt:'cycliques/offensifs devant les défensifs'};
+  if(def>offcyc+0.15) return {label:'risk-off',cls:'down',txt:'défensifs (santé, conso de base, utilities) devant'};
+  return {label:'neutre',cls:'',txt:'pas de rotation marquée'};
 }
 
-/* ---------- COUCHE IA : appel Claude (clé navigateur) ---------- */
 async function callClaude({system,user,max=1800,search=false}){
   const key=CFG.keys().anthropic;
   if(!key) throw new Error('no-key');
@@ -429,38 +364,45 @@ V.overview=async()=>{
   mountTicker();
   const ov=$('#ov'); ov.innerHTML='<div class="empty">Chargement du market_state…</div>';
   MS=await buildMarketState();
+  if(MS.error){ ov.innerHTML=proxyError(MS.error); return; }
   paintRegimeBadge(MS);
-  const tiles=arr=>arr.map((x,i)=>`<div class="card tile" style="animation-delay:${i*.04}s">
+  const tiles=arr=>(arr&&arr.length)?arr.map((x,i)=>`<div class="card tile" style="animation-delay:${i*.04}s">
       <span class="sym">${x.sym}</span>
-      <span class="val ${x.chg>=0?'up':'down'}">${sign(x.chg)}${fmt(x.chg)}%</span></div>`).join('');
-  const m=(l,v)=>`<div class="metric"><span class="v">${v}</span><span class="l">${l}</span></div>`;
-  const pinPos=((MS.regime.score+3)/6*100);
+      <span class="val ${x.chg==null?'':x.chg>=0?'up':'down'}">${x.chg==null?'<span style="color:var(--dim)">indispo.</span>':sign(x.chg)+fmt(x.chg)+'%'}</span></div>`).join('')
+      :'<div class="card" style="color:var(--mut)">indisponible</div>';
+  const m=(l,v)=>`<div class="metric"><span class="v">${v==null?'<span style="color:var(--dim)">—</span>':v}</span><span class="l">${l}</span></div>`;
+  const pinPos=(((MS.regime.score||0)+3)/6*100);
   ov.innerHTML=`
-    ${MS.demo?'<div class="banner">Mode démo — aucune clé API configurée. Les chiffres sont illustratifs. Va dans <b>Paramètres</b> pour brancher FRED / Finnhub / FMP et passer en live.</div>':''}
     <div class="section-h"><h3>Clôture US (hier)</h3><span class="ln"></span></div>
     <div class="grid g3">${tiles(MS.overnight.us_close)}</div>
     <div class="section-h"><h3>Asie (nuit)</h3><span class="ln"></span></div>
     <div class="grid g3">${tiles(MS.overnight.asia)}</div>
     <div class="section-h"><h3>Futures &amp; ouverture anticipée</h3><span class="ln"></span></div>
-    <div class="grid g3" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">${tiles(MS.overnight.futures)}</div>
-    <p style="color:var(--dim);font-size:11px;font-family:var(--mono);margin-top:6px">ES/NQ/YM = futures US (overnight, via FMP) · DAX/CAC = cash (futures Eurex non dispo en gratuit)</p>
+    ${(MS.overnight.futures&&MS.overnight.futures.length)?`<div class="grid g3" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">${tiles(MS.overnight.futures)}</div>`:`<div class="card" style="color:var(--mut);font-size:12.5px">${MS.futures_note||'Futures temps réel non branchés (flux payant requis).'}</div>`}
     <div class="section-h"><h3>Baromètre de régime</h3><span class="ln"></span></div>
     <div class="card"><div class="baro">
-      ${m('VIX',fmt(MS.regime.vix,1))}
+      ${m('VIX',MS.regime.vix==null?null:fmt(MS.regime.vix,1))}
       ${m('term structure',MS.regime.vix_term)}
-      ${m('spread HY',fmt(MS.regime.hy_oas,1))}
+      ${m('spread HY',MS.regime.hy_oas==null?null:fmt(MS.regime.hy_oas,1))}
       ${m('breadth (RSP/SPY)',MS.regime.rsp_spy)}
       <div class="scorebar"><div class="pin" style="left:${pinPos}%"></div></div>
-      ${m('score',sign(MS.regime.score)+MS.regime.score)}
+      ${m('score',sign(MS.regime.score)+(MS.regime.score==null?'—':MS.regime.score))}
     </div></div>
     <div class="section-h"><h3>Toile de fond taux</h3><span class="ln"></span></div>
     <div class="grid g4">
-      <div class="card tile"><span class="sym">US 10Y</span><span class="val">${fmt(MS.backdrop.us10y)}%</span></div>
-      <div class="card tile"><span class="sym">taux réel 10Y</span><span class="val">${fmt(MS.backdrop.real_10y)}%</span></div>
-      <div class="card tile"><span class="sym">courbe 2s10s</span><span class="val">${fmt(MS.backdrop.curve_2s10s)}</span></div>
-      <div class="card tile"><span class="sym">DXY</span><span class="val">${fmt(MS.backdrop.dxy,1)}</span></div>
+      <div class="card tile"><span class="sym">US 10Y</span><span class="val">${MS.backdrop.us10y==null?'—':fmt(MS.backdrop.us10y)+'%'}</span></div>
+      <div class="card tile"><span class="sym">taux réel 10Y</span><span class="val">${MS.backdrop.real_10y==null?'—':fmt(MS.backdrop.real_10y)+'%'}</span></div>
+      <div class="card tile"><span class="sym">courbe 2s10s</span><span class="val">${MS.backdrop.curve_2s10s==null?'—':fmt(MS.backdrop.curve_2s10s)}</span></div>
+      <div class="card tile"><span class="sym">DXY</span><span class="val">${MS.backdrop.dxy==null?'—':fmt(MS.backdrop.dxy,1)}</span></div>
     </div>`;
 };
+function proxyError(msg){
+  const noproxy=msg==='no-proxy';
+  return `<div class="banner">${noproxy
+    ? 'Aucun proxy configuré. Le terminal lit ses données réelles via ton proxy FastAPI. Renseigne son URL dans <b>Paramètres → Proxy de données</b>.'
+    : 'Proxy injoignable ('+msg+'). Vérifie que ton service FastAPI tourne et que son URL est correcte dans Paramètres.'}</div>
+    <div class="empty">Pas de données réelles tant que le proxy n'est pas branché — et aucune donnée factice ne sera affichée.</div>`;
+}
 
 V.brief=async()=>{
   $('#view').innerHTML=`<div class="h1">desk<b>Morning <em>brief</em></b></div>
@@ -475,18 +417,25 @@ V.brief=async()=>{
   $('#refData').onclick=async()=>{MS=await buildMarketState();paintRegimeBadge(MS);renderFactbar();};
   $('#genBrief').onclick=genBrief;
 };
+function futAverage(){
+  const f=(MS.overnight.futures||[]).filter(x=>x.chg!=null);
+  if(f.length) return f.reduce((a,b)=>a+b.chg,0)/f.length;
+  const u=(MS.overnight.us_close||[]).filter(x=>x.chg!=null); // repli : clôture US comme proxy d'humeur
+  return u.length?u.reduce((a,b)=>a+b.chg,0)/u.length:null;
+}
 function renderFactbar(){
   const o=$('#briefOut'); if(!o)return;
-  const f=(l,v)=>`<div class="f"><span class="l">${l}</span><span class="v">${v}</span></div>`;
-  const futAvg=(MS.overnight.futures.reduce((a,b)=>a+b.chg,0)/MS.overnight.futures.length).toFixed(2);
+  if(MS.error){ o.innerHTML=proxyError(MS.error); return; }
+  const f=(l,v)=>`<div class="f"><span class="l">${l}</span><span class="v">${v==null?'—':v}</span></div>`;
+  const fa=futAverage();
   o.innerHTML=`<div class="card"><span class="k">couche factuelle · market_state</span>
     <div class="factbar" style="margin-top:10px">
-      ${f('régime',MS.regime.risk+' ('+sign(MS.regime.score)+MS.regime.score+')')}
-      ${f('VIX',fmt(MS.regime.vix,1)+' · '+MS.regime.vix_term)}
-      ${f('futures moy.',sign(futAvg)+futAvg+'%')}
-      ${f('US 10Y',fmt(MS.backdrop.us10y)+'%')}
-      ${f('taux réel',fmt(MS.backdrop.real_10y)+'%')}
-      ${f('agenda',MS.calendar_today.map(c=>c.time+' '+c.event).join(' · ')||'—')}
+      ${f('régime',MS.regime.risk?MS.regime.risk+' ('+sign(MS.regime.score)+MS.regime.score+')':null)}
+      ${f('VIX',MS.regime.vix==null?null:fmt(MS.regime.vix,1)+(MS.regime.vix_term?' · '+MS.regime.vix_term:''))}
+      ${f('US / futures moy.',fa==null?null:sign(fa)+fa.toFixed(2)+'%')}
+      ${f('US 10Y',MS.backdrop.us10y==null?null:fmt(MS.backdrop.us10y)+'%')}
+      ${f('taux réel',MS.backdrop.real_10y==null?null:fmt(MS.backdrop.real_10y)+'%')}
+      ${f('agenda',MS.calendar_today.map(c=>c.time+' '+c.event).join(' · ')||null)}
     </div></div>
     <div id="narr"></div>`;
 }
@@ -511,14 +460,14 @@ function briefHTML(b){
     ${s('agenda',b.agenda)}${s('risques',b.risques)}
     <div style="color:var(--dim);font-size:11px;font-family:var(--mono);margin-top:10px">généré par ${CFG.model()} · chiffres injectés depuis market_state</div></div>`;
 }
-function demoBriefHTML(){ // secours rule-based depuis le market_state (sans IA)
-  const fut=(MS.overnight.futures.reduce((a,b)=>a+b.chg,0)/MS.overnight.futures.length).toFixed(2);
-  const dir=fut>=0?'en hausse':'en baisse';
+function demoBriefHTML(){ // secours rule-based depuis le market_state réel (sans IA)
+  const fa=futAverage(); const dir=fa==null?'incertaine':fa>=0?'en hausse':'en baisse';
+  const lst=a=>(a||[]).filter(x=>x.chg!=null).map(x=>x.sym+' '+sign(x.chg)+x.chg+'%').join(', ')||'—';
   const b={
-    verdict:`Ouverture européenne attendue ${dir} (futures moy. ${sign(fut)}${fut}%), régime ${MS.regime.risk}.`,
-    relais:`Clôture US : ${MS.overnight.us_close.map(x=>x.sym+' '+sign(x.chg)+x.chg+'%').join(', ')}. Asie : ${MS.overnight.asia.map(x=>x.sym+' '+sign(x.chg)+x.chg+'%').join(', ')}.`,
-    driver:`À surveiller : ${MS.calendar_today.map(c=>c.time+' '+c.event).join(', ')||'pas d\'événement macro majeur'}.`,
-    internals:`VIX ${MS.regime.vix} (${MS.regime.vix_term}), spread HY ${MS.regime.hy_oas}, breadth ${MS.regime.rsp_spy}. Score régime ${sign(MS.regime.score)}${MS.regime.score}.`,
+    verdict:`Ouverture européenne attendue ${dir}${fa==null?'':' (US/futures moy. '+sign(fa)+fa.toFixed(2)+'%)'}, régime ${MS.regime.risk||'—'}.`,
+    relais:`Clôture US : ${lst(MS.overnight.us_close)}. Asie : ${lst(MS.overnight.asia)}.`,
+    driver:`À surveiller : ${MS.calendar_today.map(c=>c.time+' '+c.event).join(', ')||'pas d\'événement macro majeur listé'}.`,
+    internals:`VIX ${MS.regime.vix??'—'}${MS.regime.vix_term?' ('+MS.regime.vix_term+')':''}, spread HY ${MS.regime.hy_oas??'—'}, breadth ${MS.regime.rsp_spy||'—'}. Score régime ${sign(MS.regime.score)}${MS.regime.score??'—'}.`,
     agenda:`Earnings : ${(MS.earnings_today||[]).join(', ')||'—'}.`,
     risques:`Template de secours (sans IA). Configure ta clé Anthropic dans Paramètres pour la narration complète.`
   };
@@ -537,15 +486,15 @@ V.catalysts=async()=>{
 };
 async function genCatalysts(){
   const btn=$('#genCat'),out=$('#catOut');
-  if(!CFG.keys().anthropic){ out.innerHTML='<div class="banner">Mode démo — exemples de fiches. Configure ta clé Anthropic (et active web_search) dans Paramètres pour le live.</div>'+DEMO_CATALYSTS.map(catHTML).join(''); bindCats(); return; }
+  if(!CFG.keys().anthropic){ out.innerHTML='<div class="banner">Clé Anthropic requise pour générer les catalyseurs (recherche web + analyse). Renseigne-la dans <b>Paramètres</b>.</div>'; return; }
   btn.disabled=true; btn.innerHTML='<span class="spin"></span> scan + analyse…';
   out.innerHTML='<div class="empty">L\'IA recherche les news et déroule les chaînes… (peut prendre 20-40s avec web_search)</div>';
   try{
-    const user=JSON.stringify({market_state:MS,structure:STRUCTURE,scope:{indices:['CAC40','SX5E','SPX','NDX'],date:new Date().toISOString().slice(0,10)},instruction:'Cherche les news corporate, M&A, earnings, guidance et géopolitique des dernières 24h sur le scope, privilégie Reuters, Bloomberg, Les Échos et communiqués officiels.'});
+    const user=JSON.stringify({market_state:(MS&&!MS.error)?MS:{note:'market_state indisponible'},structure:STRUCTURE,scope:{indices:['CAC40','SX5E','SPX','NDX'],date:new Date().toISOString().slice(0,10)},instruction:'Cherche les news corporate, M&A, earnings, guidance et géopolitique des dernières 24h sur le scope, privilégie Reuters, Bloomberg, Les Échos et communiqués officiels.'});
     const txt=await callClaude({system:CATALYST_SYSTEM,user,max:3000,search:true});
     const cats=parseJSON(txt);
-    out.innerHTML=cats.map(catHTML).join(''); bindCats();
-  }catch(e){ out.innerHTML=`<div class="banner">Échec : ${e.message}. Affichage des exemples démo.</div>`+DEMO_CATALYSTS.map(catHTML).join(''); bindCats(); }
+    out.innerHTML=cats.length?cats.map(catHTML).join(''):'<div class="empty">Aucun catalyseur significatif retenu sur les dernières 24h.</div>'; bindCats();
+  }catch(e){ out.innerHTML=`<div class="banner">Échec : ${e.message}. Réessaie, ou vérifie ta clé / ton crédit Anthropic.</div>`; }
   btn.disabled=false; btn.innerHTML='⚡ Régénérer';
 }
 function convColor(c){c=+c||1;return c>=4?'background:rgba(242,85,90,.15);color:var(--down)':c>=3?'background:rgba(233,178,58,.15);color:var(--gold)':'background:rgba(255,255,255,.06);color:var(--mut)';}
@@ -590,10 +539,57 @@ V.calendar=()=>{
    <div class="card">${MS?(MS.earnings_today||[]).map(e=>`<div class="mono" style="padding:4px 0">• ${e}</div>`).join('')||'<span style="color:var(--mut)">aucun (ou non chargé)</span>':'<span style="color:var(--mut)">charge la Vue d\'ensemble d\'abord</span>'}</div>`;
 };
 
-V.breadth=()=>roadmap('Breadth / internals','Advance-decline, % au-dessus de la MM200, new highs/lows, et le proxy RSP/SPY (équipondéré vs capi-pondéré) — déjà calculé dans le baromètre de régime. Module dédié : courbes + heatmap.');
-V.sectors=()=>roadmap('Rotation sectorielle','Heatmap des 11 secteurs (XLK, XLF, XLE…) — l\'équivalent actions de la "force des devises" d\'APEX FX. Quel secteur mène, quel secteur cale.');
-function roadmap(t,d){$('#view').innerHTML=`<div class="h1">roadmap<b>${t}</b></div><p class="sub">${d}</p>
-  <div class="empty">Module v2 — la structure est prévue. La donnée (RSP/SPY) est déjà branchée dans le baromètre de la Vue d'ensemble.</div>`;}
+V.sectors=async()=>{
+  $('#view').innerHTML=`<div class="h1">marché<b>Rotation <em>sectorielle</em></b></div>
+   <p class="sub">L'équivalent actions de la « force des devises » : quel secteur mène, quel secteur cale, et ce que ça dit du risque.</p>
+   <div id="secOut"><div class="empty">Chargement des secteurs…</div></div>`;
+  const sb=await fetchSectorBreadth();
+  const out=$('#secOut');
+  if(sb.error){ out.innerHTML=proxyError(sb.error); return; }
+  SB=sb;
+  if(!sb.sectors||!sb.sectors.length){ out.innerHTML='<div class="empty">Données secteurs indisponibles (vérifie la clé Twelve Data du proxy).</div>'; return; }
+  const sorted=[...sb.sectors].sort((a,b)=>b.chg-a.chg);
+  const max=Math.max(...sorted.map(s=>Math.abs(s.chg)),0.5);
+  const tile=s=>{const i=Math.min(Math.abs(s.chg)/max,1);const c=s.chg>=0?`rgba(61,214,140,${.12+i*.5})`:`rgba(242,85,90,${.12+i*.5})`;
+    return `<div class="card" style="background:${c};padding:12px"><div class="mono" style="font-size:11px;color:var(--mut)">${s.sym}</div>
+      <div style="font-size:13px;margin:2px 0">${s.name}</div><div class="mono" style="font-size:18px">${sign(s.chg)}${fmt(s.chg)}%</div></div>`;};
+  const rr=riskRotation(sb);
+  out.innerHTML=`
+   <div class="card" style="margin-bottom:14px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+     <span class="k">rotation</span>
+     <span class="conv mono" style="${rr.cls==='up'?'background:rgba(61,214,140,.15);color:var(--up)':rr.cls==='down'?'background:rgba(242,85,90,.15);color:var(--down)':'background:rgba(255,255,255,.06);color:var(--mut)'}">${rr.label}</span>
+     <span style="color:var(--mut);font-size:13px">${rr.txt} · réf. SPY ${sb.spy==null?'—':sign(sb.spy)+fmt(sb.spy)+'%'}</span>
+   </div>
+   <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">${sorted.map(tile).join('')}</div>
+   <p style="color:var(--dim);font-size:11px;font-family:var(--mono);margin-top:10px">offensifs/cycliques devant les défensifs = risk-on · l'inverse = risk-off</p>`;
+};
+
+V.breadth=async()=>{
+  $('#view').innerHTML=`<div class="h1">marché<b>Breadth <em>/ internals</em></b></div>
+   <p class="sub">La participation : une hausse portée par tout le marché est solide ; portée par 5 méga-caps, elle est fragile.</p>
+   <div id="brOut"><div class="empty">Chargement des internals…</div></div>`;
+  const sb=SB&&!SB.error?SB:await fetchSectorBreadth();
+  const out=$('#brOut');
+  if(sb.error){ out.innerHTML=proxyError(sb.error); return; }
+  SB=sb;
+  if(!sb.sectors||!sb.sectors.length){ out.innerHTML='<div class="empty">Données indisponibles (vérifie la clé Twelve Data du proxy).</div>'; return; }
+  const green=sb.sectors.filter(s=>s.chg>0).length, tot=sb.sectors.length;
+  const v=breadthVerdict(sb);
+  const card=(l,val,note)=>`<div class="card"><div class="k">${l}</div>
+    <div class="mono" style="font-size:22px;margin:6px 0">${val}</div><div style="color:var(--mut);font-size:12px">${note}</div></div>`;
+  const cmp=(a,b)=>(a==null||b==null)?'—':a<b?'en retard':'devant';
+  out.innerHTML=`
+   <div class="card" style="margin-bottom:14px">
+     <div class="row"><span class="k">verdict breadth</span>
+       <span class="conv mono" style="${v.cls==='up'?'background:rgba(61,214,140,.15);color:var(--up)':v.cls==='down'?'background:rgba(242,85,90,.15);color:var(--down)':'background:rgba(255,255,255,.06);color:var(--mut)'}">${v.label}</span></div>
+     <p style="margin-top:8px">${v.txt}</p></div>
+   <div class="grid g3">
+     ${card('secteurs en hausse',green+' / '+tot, green>=tot*0.6?'participation large':green<=tot*0.4?'participation étroite':'mitigé')}
+     ${card('équipondéré vs capi (RSP/SPY)',sb.rsp==null?'—':sign(sb.rsp)+fmt(sb.rsp)+'%','équipondéré '+cmp(sb.rsp,sb.spy)+' du cap-weight → '+(sb.rsp<sb.spy?'marché étroit':'sain'))}
+     ${card('small caps (IWM vs SPY)',sb.iwm==null?'—':sign(sb.iwm)+fmt(sb.iwm)+'%','small caps '+cmp(sb.iwm,sb.spy)+' → appétit pour le risque')}
+   </div>
+   <p style="color:var(--dim);font-size:11px;font-family:var(--mono);margin-top:10px">RSP = équipondéré · SPY = capi-pondéré · IWM = Russell 2000. New highs/lows & McClellan = v2 (flux dédié).</p>`;
+};
 
 V.journal=()=>{
   const items=JSON.parse(CFG.get('journal')||'[]');
@@ -613,31 +609,34 @@ function jrow(x,i){return `<div class="card" style="display:flex;gap:12px;align-
 
 V.settings=()=>{
   const k=CFG.keys();
-  const st=v=>v?'<span class="status ok">configurée</span>':'<span class="status no">non configurée</span>';
-  const fld=(id,lab,hint,val,ph)=>`<div class="field"><label>${lab}${st(val)}</label><div class="hint">${hint}</div>
-    <input id="${id}" type="password" placeholder="${ph}" value="${val||''}"></div>`;
+  const st=v=>v?'<span class="status ok">configuré</span>':'<span class="status no">non configuré</span>';
   $('#view').innerHTML=`<div class="h1">config<b>Para<em>mètres</em></b></div>
-   <p class="sub">Toutes les clés restent dans ton navigateur (localStorage). Rien n'est envoyé ailleurs qu'aux API officielles.</p>
+   <p class="sub">Les vraies données arrivent via ton proxy FastAPI. Les clés data (FRED, Twelve Data, FMP) vivent côté serveur — pas ici. Seules la clé Anthropic et l'URL du proxy restent dans ton navigateur.</p>
+   <div class="section-h"><h3>Proxy de données</h3><span class="ln"></span></div>
+   <div class="card"><div class="field"><label>URL du proxy ${st(CFG.get('proxy'))}</label>
+     <div class="hint">Ton service FastAPI déployé (ex. Railway/Render). Sans lui, aucune donnée réelle — et aucune donnée factice.</div>
+     <input id="proxy" type="text" placeholder="https://apex-proxy.up.railway.app" value="${CFG.get('proxy')||''}"></div>
+     <button class="btn ghost" id="ping">Tester la connexion</button> <span id="pingres" class="mono" style="font-size:12px"></span>
+   </div>
+   <div class="section-h"><h3>IA (brief & catalyseurs)</h3><span class="ln"></span></div>
    <div class="card">
-     ${fld('k_anthropic','Clé API Anthropic','Brief + catalyseurs IA. console.anthropic.com/settings/keys',k.anthropic,'sk-ant-…')}
+     <div class="field"><label>Clé API Anthropic ${st(k.anthropic)}</label>
+       <div class="hint">Brief + catalyseurs. Reste dans ton navigateur. console.anthropic.com/settings/keys</div>
+       <input id="k_anthropic" type="password" placeholder="sk-ant-…" value="${k.anthropic||''}"></div>
      <div class="field"><label>Modèle</label>
        <select id="model">
          <option value="claude-sonnet-4-6"${CFG.model()==='claude-sonnet-4-6'?' selected':''}>claude-sonnet-4-6 (rapide, recommandé)</option>
          <option value="claude-opus-4-8"${CFG.model()==='claude-opus-4-8'?' selected':''}>claude-opus-4-8 (le plus puissant)</option>
        </select></div>
    </div>
-   <div class="section-h"><h3>Données live (cascade)</h3><span class="ln"></span></div>
-   <div class="card">
-     ${fld('k_fred','FRED — taux & macro (source de vérité)','Gratuit, illimité. fredaccount.stlouisfed.org/apikeys',k.fred,'clé FRED')}
-     ${fld('k_finnhub','Finnhub — indices, VIX, breadth (RSP/SPY)','Gratuit 60 req/min. finnhub.io/register',k.finnhub,'clé Finnhub')}
-     ${fld('k_fmp','FMP — news & calendrier earnings','Gratuit 250 req/jour. financialmodelingprep.com',k.fmp,'clé FMP')}
-     ${fld('k_twelve','Twelve Data — backup prix','Gratuit ~800 req/jour. twelvedata.com/register',k.twelve,'clé Twelve Data')}
-   </div>
    <div class="row" style="margin-top:6px"><button class="btn" id="save">Enregistrer</button>
      <button class="btn ghost" id="clear">Tout effacer</button></div>
-   <p style="color:var(--dim);font-size:11.5px;margin-top:14px;font-family:var(--mono)">Sans clé : tout fonctionne en mode démo (chiffres illustratifs + fiches exemples). Avec les clés : market_state live + brief/catalyseurs réels.</p>`;
-  $('#save').onclick=()=>{['k_anthropic','k_fred','k_finnhub','k_fmp','k_twelve'].forEach(id=>CFG.set(id,$('#'+id).value.trim()));CFG.set('model',$('#model').value);MS=null;toast('Enregistré');};
-  $('#clear').onclick=()=>{if(confirm('Effacer toutes les clés et données locales ?')){localStorage.clear();MS=null;V.settings();}};
+   <p style="color:var(--dim);font-size:11.5px;margin-top:14px;font-family:var(--mono)">Les clés FRED / Twelve Data / FMP se configurent dans le fichier .env du proxy, jamais ici.</p>`;
+  $('#save').onclick=()=>{CFG.set('proxy',$('#proxy').value.trim());CFG.set('k_anthropic',$('#k_anthropic').value.trim());CFG.set('model',$('#model').value);MS=null;SB=null;toast('Enregistré');};
+  $('#clear').onclick=()=>{if(confirm('Effacer toutes les clés et données locales ?')){localStorage.clear();MS=null;SB=null;V.settings();}};
+  $('#ping').onclick=async()=>{const p=$('#proxy').value.trim().replace(/\/$/,'');const r=$('#pingres');r.textContent='…';
+    try{const d=await jget(p+'/api/health');r.innerHTML=`<span class="up">OK</span> · clés serveur : ${Object.entries(d.keys).filter(([,v])=>v).map(([n])=>n).join(', ')||'aucune'}`;}
+    catch(e){r.innerHTML='<span class="down">injoignable</span>';}};
 };
 function toast(m){const t=document.createElement('div');t.textContent=m;t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--gold);color:#1a1407;padding:10px 18px;border-radius:8px;font-weight:600;z-index:99';document.body.appendChild(t);setTimeout(()=>t.remove(),1600);}
 

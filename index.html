@@ -271,7 +271,7 @@ const DEMO_STATE={
   overnight:{
     us_close:[{sym:'S&P 500',chg:-0.8},{sym:'Nasdaq 100',chg:-1.2},{sym:'Dow',chg:-0.4}],
     asia:[{sym:'Nikkei',chg:-1.5},{sym:'Hang Seng',chg:0.3}],
-    futures:[{sym:'ES (S&P)',chg:-0.4},{sym:'NQ (Nasdaq)',chg:-0.6},{sym:'FDAX',chg:-0.6},{sym:'FCE (CAC)',chg:-0.5}]
+    futures:[{sym:'ES (S&P)',chg:-0.4},{sym:'NQ (Nasdaq)',chg:-0.6},{sym:'YM (Dow)',chg:-0.3},{sym:'DAX (cash)',chg:-0.6},{sym:'CAC (cash)',chg:-0.5}]
   },
   backdrop:{us10y:4.68,real_10y:2.07,curve_2s10s:0.12,dxy:104.2,oil:110.3},
   calendar_today:[{time:'14:30',event:'CPI US',impact:'high'},{time:'20:00',event:'Discours Fed',impact:'med'}],
@@ -308,6 +308,13 @@ async function finnhubQuote(sym,key){
   const d=await jget(`https://finnhub.io/api/v1/quote?symbol=${sym}&token=${key}`);
   return {price:d.c,chg:d.dp}; // dp = % change
 }
+/* FMP : batch quote (indices ^, futures US ...USD, ETF). 1 seul appel. */
+async function fmpQuotes(syms,key){
+  const u=`https://financialmodelingprep.com/api/v3/quote/${syms.map(encodeURIComponent).join(',')}?apikey=${key}`;
+  const arr=await jget(u);
+  const m={}; (arr||[]).forEach(q=>m[q.symbol]={price:q.price,chg:q.changesPercentage});
+  return m; // m['^GSPC'].chg, m['ESUSD'].chg, ...
+}
 
 async function buildMarketState(){
   const k=CFG.keys();
@@ -320,16 +327,31 @@ async function buildMarketState(){
     st.backdrop.us10y=t10; st.backdrop.real_10y=r10; st.backdrop.curve_2s10s=+(t10-t2).toFixed(2);
     st.freshness.rates='live';
   }catch(e){st.freshness.rates='fallback'} }
-  // indices via Finnhub (proxies ETF en pré-market : SPY/QQQ/DIA)
-  if(k.finnhub){ try{
+  // marché via FMP : 1 appel batché — cash US/Asie, FUTURES US, cash EU, VIX, breadth
+  let done=false;
+  if(k.fmp){ try{
+    const q=await fmpQuotes(['^GSPC','^IXIC','^DJI','^N225','^HSI','ESUSD','NQUSD','YMUSD','^GDAXI','^FCHI','^VIX','RSP','SPY'],k.fmp);
+    const c=(s,fb)=>q[s]&&q[s].chg!=null?+q[s].chg.toFixed(2):fb;
+    st.overnight.us_close=[{sym:'S&P 500',chg:c('^GSPC',null)},{sym:'Nasdaq 100',chg:c('^IXIC',null)},{sym:'Dow',chg:c('^DJI',null)}];
+    st.overnight.asia=[{sym:'Nikkei',chg:c('^N225',null)},{sym:'Hang Seng',chg:c('^HSI',null)}];
+    // futures US (overnight) + cash EU en proxy d'ouverture (pas de futures Eurex gratuits)
+    st.overnight.futures=[
+      {sym:'ES (S&P)',chg:c('ESUSD',null)},{sym:'NQ (Nasdaq)',chg:c('NQUSD',null)},{sym:'YM (Dow)',chg:c('YMUSD',null)},
+      {sym:'DAX (cash)',chg:c('^GDAXI',null)},{sym:'CAC (cash)',chg:c('^FCHI',null)}
+    ].filter(x=>x.chg!=null);
+    if(q['^VIX']&&q['^VIX'].price) st.regime.vix=+q['^VIX'].price.toFixed(1);
+    if(q['RSP']&&q['SPY']) st.regime.rsp_spy=(q['RSP'].chg<q['SPY'].chg)?'divergence négative (étroit)':'breadth saine';
+    st.freshness.indices='live'; st.freshness.futures='live'; done=true;
+  }catch(e){st.freshness.indices='fallback'} }
+  // repli Finnhub si pas de FMP (cash US via proxies ETF, futures restent en démo)
+  if(!done && k.finnhub){ try{
     const map=[['SPY','S&P 500'],['QQQ','Nasdaq 100'],['DIA','Dow']];
-    const q=await Promise.all(map.map(m=>finnhubQuote(m[0],k.finnhub)));
-    st.overnight.us_close=map.map((m,i)=>({sym:m[1],chg:q[i].chg}));
+    const fq=await Promise.all(map.map(m=>finnhubQuote(m[0],k.finnhub)));
+    st.overnight.us_close=map.map((m,i)=>({sym:m[1],chg:fq[i].chg}));
     const vix=await finnhubQuote('^VIX',k.finnhub); if(vix.price) st.regime.vix=+vix.price.toFixed(1);
-    // breadth proxy : RSP vs SPY
     const [rsp,spy]=await Promise.all([finnhubQuote('RSP',k.finnhub),finnhubQuote('SPY',k.finnhub)]);
-    st.regime.rsp_spy = (rsp.chg<spy.chg) ? 'divergence négative (étroit)' : 'breadth saine';
-    st.freshness.indices='live';
+    st.regime.rsp_spy=(rsp.chg<spy.chg)?'divergence négative (étroit)':'breadth saine';
+    st.freshness.indices='live'; st.freshness.futures='fallback (futures US requièrent FMP)';
   }catch(e){st.freshness.indices='fallback'} }
   st.regime.score=scoreRegime(st);
   return st;
@@ -419,8 +441,9 @@ V.overview=async()=>{
     <div class="grid g3">${tiles(MS.overnight.us_close)}</div>
     <div class="section-h"><h3>Asie (nuit)</h3><span class="ln"></span></div>
     <div class="grid g3">${tiles(MS.overnight.asia)}</div>
-    <div class="section-h"><h3>Futures (ouverture anticipée)</h3><span class="ln"></span></div>
-    <div class="grid g4">${tiles(MS.overnight.futures)}</div>
+    <div class="section-h"><h3>Futures &amp; ouverture anticipée</h3><span class="ln"></span></div>
+    <div class="grid g3" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">${tiles(MS.overnight.futures)}</div>
+    <p style="color:var(--dim);font-size:11px;font-family:var(--mono);margin-top:6px">ES/NQ/YM = futures US (overnight, via FMP) · DAX/CAC = cash (futures Eurex non dispo en gratuit)</p>
     <div class="section-h"><h3>Baromètre de régime</h3><span class="ln"></span></div>
     <div class="card"><div class="baro">
       ${m('VIX',fmt(MS.regime.vix,1))}

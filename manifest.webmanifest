@@ -1,0 +1,14 @@
+{
+  "name": "APEX · indices",
+  "short_name": "APEX idx",
+  "description": "Terminal institutionnel indices — morning brief & catalyseurs",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0A0C10",
+  "theme_color": "#0A0C10",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

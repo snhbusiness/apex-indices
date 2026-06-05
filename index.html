@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0A0C10" />
+<link rel="manifest" href="manifest.webmanifest" />
+<title>APEX · indices — terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --bg:#0A0C10; --bg2:#0E1117; --panel:#12161D; --panel2:#171C24;
+  --line:rgba(255,255,255,.07); --line2:rgba(255,255,255,.12);
+  --tx:#E6E8EC; --mut:#8A909C; --dim:#565C68;
+  --gold:#E9B23A; --gold-d:#7a5e18;
+  --up:#3DD68C; --down:#F2555A; --teal:#4FD1C5; --pur:#A99BF5; --amb:#E6A33E; --blue:#5AA9F0;
+  --r:6px; --sans:'IBM Plex Sans',system-ui,sans-serif; --mono:'IBM Plex Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--tx); font-family:var(--sans); font-size:14px; line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(1200px 700px at 80% -10%, rgba(233,178,58,.05), transparent 60%);
+}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.up{color:var(--up)} .down{color:var(--down)} .gold{color:var(--gold)}
+button{font-family:inherit;cursor:pointer;color:inherit}
+a{color:var(--gold);text-decoration:none}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:#222833;border-radius:6px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ---- shell ---- */
+.app{display:grid;grid-template-columns:230px 1fr;min-height:100vh}
+.side{
+  background:linear-gradient(180deg,var(--bg2),var(--bg));
+  border-right:1px solid var(--line); padding:18px 12px; position:sticky;top:0;height:100vh;overflow:auto;
+}
+.brand{display:flex;align-items:baseline;gap:8px;padding:6px 8px 16px}
+.brand b{font-family:var(--mono);font-weight:600;letter-spacing:.28em;font-size:16px}
+.brand span{color:var(--gold);font-family:var(--mono);font-size:11px;letter-spacing:.2em}
+.navgrp{margin:14px 0 4px;padding:0 8px;color:var(--dim);font-size:10px;letter-spacing:.18em;text-transform:uppercase}
+.nav{display:flex;align-items:center;gap:9px;width:100%;background:none;border:0;text-align:left;
+  padding:8px 10px;border-radius:var(--r);color:var(--mut);font-size:13px;transition:.12s}
+.nav:hover{background:var(--panel);color:var(--tx)}
+.nav.on{background:var(--panel2);color:var(--tx);box-shadow:inset 2px 0 0 var(--gold)}
+.nav i{width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.5;flex:0 0 auto}
+.nav.on i{background:var(--gold);opacity:1}
+.nav .tag{margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--gold-d);border:1px solid var(--gold-d);
+  border-radius:3px;padding:0 4px;letter-spacing:.05em}
+
+/* ---- topbar ---- */
+.main{display:flex;flex-direction:column;min-width:0}
+.top{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  padding:11px 22px;background:rgba(10,12,16,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.clock{font-family:var(--mono);font-size:13px;letter-spacing:.04em}
+.clock .lab{color:var(--dim);font-size:10px;letter-spacing:.14em;margin-right:5px}
+.sessions{display:flex;gap:6px}
+.sess{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--mut);
+  border:1px solid var(--line);border-radius:20px;padding:3px 9px}
+.sess .d{width:7px;height:7px;border-radius:50%;background:var(--dim)}
+.sess.open .d{background:var(--up);box-shadow:0 0 8px var(--up)}
+.sess.open{color:var(--tx)}
+.regime{margin-left:auto;display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;
+  border:1px solid var(--line2);border-radius:20px;padding:4px 12px}
+.regime .dot{width:8px;height:8px;border-radius:50%}
+.gear{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:7px 11px;color:var(--mut)}
+.gear:hover{color:var(--tx);border-color:var(--line2)}
+
+/* ---- content ---- */
+.wrap{padding:24px 22px 60px;max-width:1180px;width:100%}
+.h1{font-size:13px;letter-spacing:.05em}
+.h1 b{font-weight:600;font-size:22px;letter-spacing:-.01em;display:block;margin-top:2px}
+.h1 b em{font-style:normal;color:var(--gold)}
+.sub{color:var(--mut);font-size:13px;margin:6px 0 22px;max-width:620px}
+
+.grid{display:grid;gap:14px}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+.g2{grid-template-columns:repeat(2,1fr)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;
+  animation:rise .5s both}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.card .k{color:var(--dim);font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase}
+.tile{display:flex;flex-direction:column;gap:3px}
+.tile .sym{font-family:var(--mono);font-size:12px;color:var(--mut);letter-spacing:.05em}
+.tile .val{font-family:var(--mono);font-size:24px;font-weight:500;letter-spacing:-.01em}
+.tile .chg{font-family:var(--mono);font-size:13px}
+.section-h{display:flex;align-items:center;gap:10px;margin:26px 0 12px}
+.section-h h3{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);font-weight:600}
+.section-h .ln{flex:1;height:1px;background:var(--line)}
+
+/* regime barometer */
+.baro{display:flex;flex-wrap:wrap;gap:22px;align-items:center}
+.metric{display:flex;flex-direction:column;gap:2px}
+.metric .v{font-family:var(--mono);font-size:18px;font-weight:500}
+.metric .l{color:var(--dim);font-size:11px;font-family:var(--mono);letter-spacing:.05em}
+.scorebar{flex:1;min-width:180px;height:8px;border-radius:5px;background:linear-gradient(90deg,var(--down),#caa23e,var(--up));position:relative}
+.scorebar .pin{position:absolute;top:-4px;width:3px;height:16px;background:#fff;border-radius:2px;transform:translateX(-50%);transition:.6s}
+
+/* buttons */
+.btn{background:var(--gold);color:#1a1407;border:0;border-radius:var(--r);padding:10px 16px;font-weight:600;font-size:13px;
+  display:inline-flex;align-items:center;gap:8px;transition:.12s}
+.btn:hover{filter:brightness(1.08)}
+.btn.ghost{background:var(--panel2);color:var(--tx);border:1px solid var(--line2)}
+.btn.ghost:hover{border-color:var(--gold)}
+.btn:disabled{opacity:.5;cursor:default}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+/* brief */
+.brief-body{white-space:pre-wrap;line-height:1.7}
+.brief-sec{border-top:1px solid var(--line);padding:14px 0}
+.brief-sec:first-child{border:0;padding-top:0}
+.brief-sec .lab{color:var(--gold);font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;margin-bottom:6px}
+.verdict{font-size:17px;line-height:1.5;font-weight:500}
+.factbar{display:flex;flex-wrap:wrap;gap:14px 26px;padding:14px 16px;background:var(--bg2);border:1px solid var(--line);
+  border-radius:8px;margin-top:8px}
+.factbar .f{display:flex;flex-direction:column}
+.factbar .f .l{color:var(--dim);font-size:10px;font-family:var(--mono);letter-spacing:.08em}
+.factbar .f .v{font-family:var(--mono);font-size:15px}
+
+/* catalysts */
+.cat{border:1px solid var(--line);border-radius:10px;margin-bottom:12px;overflow:hidden;background:var(--panel);animation:rise .5s both}
+.cat .head{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;cursor:pointer}
+.cat .conv{font-family:var(--mono);font-size:11px;border-radius:5px;padding:3px 7px;flex:0 0 auto;align-self:center}
+.cat .ttl{font-weight:600;font-size:15px}
+.cat .meta{display:flex;gap:7px;flex-wrap:wrap;margin-top:6px}
+.pill{font-family:var(--mono);font-size:10px;letter-spacing:.04em;border:1px solid var(--line2);color:var(--mut);
+  border-radius:20px;padding:2px 9px;text-transform:uppercase}
+.pill.h{color:var(--down);border-color:#5a2a2c} .pill.s{color:var(--blue);border-color:#27425e}
+.pill.t{color:var(--teal);border-color:#1f4a45}
+.cat .body{padding:0 16px 16px;display:none}
+.cat.open .body{display:block}
+.cat .chev{margin-left:auto;color:var(--dim);font-family:var(--mono);align-self:center}
+.chain{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 14px}
+.node{font-family:var(--mono);font-size:12px;border:1px solid var(--line2);border-radius:6px;padding:5px 9px;background:var(--bg2)}
+.node.pos{color:var(--up);border-color:#1f4a36} .node.neg{color:var(--down);border-color:#5a2a2c}
+.kv{display:grid;grid-template-columns:120px 1fr;gap:6px 14px;margin:4px 0}
+.kv .k2{color:var(--dim);font-family:var(--mono);font-size:11px;letter-spacing:.04em;padding-top:1px}
+.scn{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:8px}
+.scn .b{border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--bg2)}
+.scn .b .t{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:4px}
+.scn .b.bull .t{color:var(--up)} .scn .b.bear .t{color:var(--down)} .scn .b.base .t{color:var(--mut)} .scn .b.inval .t{color:var(--amb)}
+
+/* settings */
+.field{margin-bottom:16px}
+.field label{display:block;font-size:13px;margin-bottom:5px}
+.field .hint{color:var(--mut);font-size:12px;margin-bottom:7px}
+.field input,.field select{width:100%;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r);
+  padding:9px 11px;color:var(--tx);font-family:var(--mono);font-size:13px}
+.field input:focus,.field select:focus{outline:0;border-color:var(--gold)}
+.status{font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:4px;margin-left:8px}
+.status.ok{color:var(--up);background:rgba(61,214,140,.1)}
+.status.no{color:var(--dim);background:rgba(255,255,255,.04)}
+
+.empty{color:var(--mut);text-align:center;padding:40px 20px;border:1px dashed var(--line2);border-radius:10px}
+.banner{background:rgba(233,178,58,.08);border:1px solid var(--gold-d);border-radius:8px;padding:11px 14px;
+  font-size:12.5px;color:#e9d3a0;margin-bottom:18px}
+.spin{width:14px;height:14px;border:2px solid rgba(0,0,0,.25);border-top-color:#1a1407;border-radius:50%;
+  animation:sp .7s linear infinite;display:inline-block}
+@keyframes sp{to{transform:rotate(360deg)}}
+.tv{height:46px;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:4px}
+
+/* mobile */
+.menubtn{display:none}
+@media(max-width:880px){
+  .app{grid-template-columns:1fr}
+  .side{position:fixed;left:0;top:0;z-index:50;width:240px;transform:translateX(-100%);transition:.25s}
+  .side.show{transform:none}
+  .menubtn{display:inline-flex}
+  .g3,.g4{grid-template-columns:repeat(2,1fr)}
+  .scn{grid-template-columns:1fr}
+  .wrap{padding:18px 14px 60px}
+  .regime{margin-left:0}
+}
+@media(max-width:520px){.g3,.g4,.g2{grid-template-columns:1fr}}
+.scrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:40}
+.scrim.show{display:block}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- SIDEBAR -->
+  <aside class="side" id="side">
+    <div class="brand"><b>APEX</b><span>indices</span></div>
+    <div class="navgrp">Marché</div>
+    <button class="nav on" data-v="overview"><i></i>Vue d'ensemble</button>
+    <button class="nav" data-v="brief"><i></i>Morning brief</button>
+    <button class="nav" data-v="catalysts"><i></i>Catalyseurs <span class="tag">IA</span></button>
+    <div class="navgrp">Données</div>
+    <button class="nav" data-v="calendar"><i></i>Calendrier</button>
+    <button class="nav" data-v="breadth"><i></i>Breadth <span class="tag">v2</span></button>
+    <button class="nav" data-v="sectors"><i></i>Secteurs <span class="tag">v2</span></button>
+    <div class="navgrp">Desk</div>
+    <button class="nav" data-v="journal"><i></i>Journal</button>
+    <button class="nav" data-v="settings"><i></i>Paramètres</button>
+    <div style="margin-top:24px;padding:0 8px;color:var(--dim);font-family:var(--mono);font-size:10px;line-height:1.7">
+      v1.0 · indices build<br>brief 2-couches · catalyseurs IA<br>données locales · navigateur
+    </div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <header class="top">
+      <button class="gear menubtn" id="menubtn">≡</button>
+      <div class="clock"><span class="lab">PARIS</span><span id="cParis">--:--</span></div>
+      <div class="clock"><span class="lab">UTC</span><span id="cUtc">--:--</span></div>
+      <div class="sessions" id="sessions"></div>
+      <div class="regime" id="regimeBadge"><span class="dot" style="background:var(--dim)"></span><span>régime —</span></div>
+      <button class="gear" data-v="settings">⚙</button>
+    </header>
+    <div class="wrap" id="view"></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   APEX · indices — terminal mono-fichier
+   Architecture : couche factuelle (déterministe) + couche
+   narrative (IA). Données + clés en localStorage.
+   ============================================================ */
+const $=(s,r=document)=>r.querySelector(s);
+const fmt=(n,d=2)=>n==null||isNaN(n)?'—':Number(n).toLocaleString('fr-FR',{minimumFractionDigits:d,maximumFractionDigits:d});
+const sign=n=>n==null?'':(n>=0?'+':'');
+
+/* ---------- CONFIG (localStorage) ---------- */
+const CFG={
+  get:k=>localStorage.getItem('apexidx_'+k)||'',
+  set:(k,v)=>localStorage.setItem('apexidx_'+k,v),
+  keys:()=>({anthropic:CFG.get('k_anthropic'),fmp:CFG.get('k_fmp'),finnhub:CFG.get('k_finnhub'),
+            fred:CFG.get('k_fred'),twelve:CFG.get('k_twelve')}),
+  model:()=>CFG.get('model')||'claude-sonnet-4-6'
+};
+
+/* ---------- STRUCTURE : base de référence injectée à l'IA ----------
+   Poids indices + graphe pairs (fournisseur / concurrent / secteur).
+   À enrichir : c'est ce qui empêche l'IA de halluciner les relations. */
+const STRUCTURE={
+  indices:{
+    CAC40:{top:{LVMH:'~11%',Airbus:'~7%','TotalEnergies':'~7%',Schneider:'~6%','Sanofi':'~5%','L\'Oréal':'~5%'}},
+    SX5E:{note:'Euro Stoxx 50 — large cap zone euro'},
+    SPX:{top:{'Apple':'~7%','Microsoft':'~7%','Nvidia':'~6%','Amazon':'~4%','Meta':'~2.5%'},note:'concentration Mag7 dominante'},
+    NDX:{note:'Nasdaq 100 — tech lourd, sensible aux taux réels'}
+  },
+  peers:{
+    Airbus:{fournisseurs:['Safran','MTU Aero'],concurrents:['Boeing'],secteur:'Aéronautique & Défense',indices:['CAC40','SX5E']},
+    'Pernod Ricard':{concurrents:['Diageo','Campari','Rémy Cointreau'],secteur:'Spiritueux',indices:['CAC40'],theme:'pression santé / GLP-1 / sans-alcool'},
+    LVMH:{concurrents:['Kering','Hermès','Richemont'],secteur:'Luxe',indices:['CAC40','SX5E']},
+    TotalEnergies:{secteur:'Énergie',drivers:['Brent','WTI'],indices:['CAC40','SX5E']},
+    Nvidia:{fournisseurs:['TSMC','SK Hynix'],concurrents:['AMD'],clients:['Microsoft','Meta','Amazon'],secteur:'Semis IA',indices:['SPX','NDX']}
+  },
+  liquidity_playbook:{
+    'M&A':'cible gap vers prix d\'offre (spread arbitrage), acquéreur baisse souvent, reweighting indiciel si taille change, desks merger-arb actifs',
+    contract:'souvent move 1 jour puis fade sauf si guidance modifiée',
+    policy:'re-rating lent sur semaines, lecture thématique sectorielle',
+    earnings:'gamma/pinning options autour des strikes, vol implicite élevée avant',
+    macro:'mouvement large multi-actifs, flux directionnels indices/taux',
+    geopolitical:'flight-to-quality possible, énergie + défense réactifs'
+  }
+};
+
+/* ---------- DEMO : fallback si aucune donnée live (graceful degradation) ---------- */
+const DEMO_STATE={
+  generated_at:new Date().toISOString(), demo:true,
+  freshness:{us_close:'demo',asia:'demo',futures:'demo'},
+  regime:{risk:'risk-off',vix:19.4,vix_term:'backwardation',hy_oas:3.8,rsp_spy:'divergence négative',score:-2},
+  overnight:{
+    us_close:[{sym:'S&P 500',chg:-0.8},{sym:'Nasdaq 100',chg:-1.2},{sym:'Dow',chg:-0.4}],
+    asia:[{sym:'Nikkei',chg:-1.5},{sym:'Hang Seng',chg:0.3}],
+    futures:[{sym:'ES (S&P)',chg:-0.4},{sym:'NQ (Nasdaq)',chg:-0.6},{sym:'FDAX',chg:-0.6},{sym:'FCE (CAC)',chg:-0.5}]
+  },
+  backdrop:{us10y:4.68,real_10y:2.07,curve_2s10s:0.12,dxy:104.2,oil:110.3},
+  calendar_today:[{time:'14:30',event:'CPI US',impact:'high'},{time:'20:00',event:'Discours Fed',impact:'med'}],
+  earnings_today:['Nvidia (après clôture US)'],
+  news_top:['—']
+};
+const DEMO_CATALYSTS=[{
+  headline:'Airbus signe un contrat majeur de livraison long-courriers',
+  entity:'Airbus',type:'contract',surprise:'high',horizon:'days',conviction:3,
+  direct_impact:{Airbus:'+ direct (carnet de commandes)',Safran:'+ fournisseur moteurs',Boeing:'- concurrent'},
+  index_transmission:{CAC40:'poids ~7% → impact modéré positif',SX5E:'contribution positive secteur aéro'},
+  liquidity:'contrat en USD → flux ; upgrades analystes probables ; surveiller open interest options Airbus/Safran',
+  scenarios:{bull:'cassure des plus hauts, Safran suit, secteur défense entraîné',base:'gap +1-2% à l\'ouverture puis consolidation',bear:'rumeur déjà pricée, fade dans la journée',invalidation:'détail du carnet décevant ou annulation antérieure non dite'},
+  watch:['réaction Safran à l\'ouverture','Boeing en pré-market US'],sources:['démo']
+},{
+  headline:'Pernod Ricard accélère sa stratégie sans-alcool',
+  entity:'Pernod Ricard',type:'policy',surprise:'med',horizon:'structural',conviction:2,
+  direct_impact:{'Pernod Ricard':'~ neutre court terme, re-rating lent',Diageo:'~ même tendance sectorielle',Campari:'~ exposé thème'},
+  index_transmission:{CAC40:'impact marginal court terme, signal thématique secteur spiritueux'},
+  liquidity:'pas de choc de liquidité immédiat ; flux thématiques ESG/santé sur semaines',
+  scenarios:{bull:'le marché valorise le repositionnement croissance',base:'thème de fond, peu d\'effet séance',bear:'lecture comme aveu de faiblesse sur le cœur de métier',invalidation:'volumes spiritueux classiques rebondissent'},
+  watch:['réaction Diageo','notes analystes secteur'],sources:['démo']
+}];
+
+/* ---------- DATA LAYER : cascade par catégorie ----------
+   Chaque fetch est isolé et tombe en fallback DEMO si échec/clé absente. */
+async function jget(url,opt){const r=await fetch(url,opt);if(!r.ok)throw new Error(r.status);return r.json();}
+
+async function fredSeries(id,key){ // dernière obs
+  const u=`https://api.stlouisfed.org/fred/series/observations?series_id=${id}&api_key=${key}&file_type=json&sort_order=desc&limit=1`;
+  const d=await jget(u); return parseFloat(d.observations[0].value);
+}
+async function finnhubQuote(sym,key){
+  const d=await jget(`https://finnhub.io/api/v1/quote?symbol=${sym}&token=${key}`);
+  return {price:d.c,chg:d.dp}; // dp = % change
+}
+
+async function buildMarketState(){
+  const k=CFG.keys();
+  if(!k.fred && !k.finnhub && !k.fmp) return {...DEMO_STATE};
+  const st=JSON.parse(JSON.stringify(DEMO_STATE)); st.demo=false; st.generated_at=new Date().toISOString();
+  st.freshness={};
+  // backdrop via FRED (source de vérité)
+  if(k.fred){ try{
+    const [t10,r10,t2]=await Promise.all([fredSeries('DGS10',k.fred),fredSeries('DFII10',k.fred),fredSeries('DGS2',k.fred)]);
+    st.backdrop.us10y=t10; st.backdrop.real_10y=r10; st.backdrop.curve_2s10s=+(t10-t2).toFixed(2);
+    st.freshness.rates='live';
+  }catch(e){st.freshness.rates='fallback'} }
+  // indices via Finnhub (proxies ETF en pré-market : SPY/QQQ/DIA)
+  if(k.finnhub){ try{
+    const map=[['SPY','S&P 500'],['QQQ','Nasdaq 100'],['DIA','Dow']];
+    const q=await Promise.all(map.map(m=>finnhubQuote(m[0],k.finnhub)));
+    st.overnight.us_close=map.map((m,i)=>({sym:m[1],chg:q[i].chg}));
+    const vix=await finnhubQuote('^VIX',k.finnhub); if(vix.price) st.regime.vix=+vix.price.toFixed(1);
+    // breadth proxy : RSP vs SPY
+    const [rsp,spy]=await Promise.all([finnhubQuote('RSP',k.finnhub),finnhubQuote('SPY',k.finnhub)]);
+    st.regime.rsp_spy = (rsp.chg<spy.chg) ? 'divergence négative (étroit)' : 'breadth saine';
+    st.freshness.indices='live';
+  }catch(e){st.freshness.indices='fallback'} }
+  st.regime.score=scoreRegime(st);
+  return st;
+}
+
+/* règle de scoring régime — déterministe, jamais l'IA */
+function scoreRegime(s){
+  let sc=0;
+  if(s.regime.vix<16)sc+=2; else if(s.regime.vix<20)sc+=0; else if(s.regime.vix<26)sc-=1; else sc-=2;
+  if(s.regime.vix_term==='backwardation')sc-=1; else sc+=1;
+  if(s.regime.hy_oas<3.5)sc+=1; else if(s.regime.hy_oas>4.5)sc-=1;
+  if((s.regime.rsp_spy||'').includes('négative'))sc-=1;
+  const fut=(s.overnight.futures||[]).reduce((a,b)=>a+(b.chg||0),0);
+  if(fut>0.4)sc+=1; else if(fut<-0.4)sc-=1;
+  return Math.max(-3,Math.min(3,sc));
+}
+
+/* ---------- COUCHE IA : appel Claude (clé navigateur) ---------- */
+async function callClaude({system,user,max=1800,search=false}){
+  const key=CFG.keys().anthropic;
+  if(!key) throw new Error('no-key');
+  const body={model:CFG.model(),max_tokens:max,system,messages:[{role:'user',content:user}]};
+  if(search) body.tools=[{type:'web_search_20250305',name:'web_search',max_uses:5}];
+  const r=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify(body)
+  });
+  if(!r.ok){const t=await r.text();throw new Error('API '+r.status+' '+t.slice(0,140))}
+  const d=await r.json();
+  return d.content.filter(c=>c.type==='text').map(c=>c.text).join('\n').trim();
+}
+function parseJSON(txt){ // tolère ```json
+  const c=txt.replace(/```json|```/g,'').trim();
+  const a=c.indexOf('['),o=c.indexOf('{');
+  const start=(a>=0&&(a<o||o<0))?a:o; const end=Math.max(c.lastIndexOf(']'),c.lastIndexOf('}'));
+  return JSON.parse(c.slice(start,end+1));
+}
+
+/* ---------- PROMPTS ---------- */
+const BRIEF_SYSTEM=`Tu es analyste sur un desk macro/actions. Tu produis le brief matinal indices pour un trader basé en Europe (Paris).
+ENTRÉE : un objet market_state (chiffres déjà calculés, source de vérité).
+RÈGLES STRICTES :
+- Ne cite QUE des chiffres présents dans market_state. N'en invente aucun.
+- Réponds en français, ton de desk : dense, direct, sans bullshit.
+- Le brief répond à : dans quelle humeur les marchés ouvrent en Europe, et pourquoi.
+- Structure : 1) verdict en une phrase  2) relais overnight (clôture US → Asie → futures)  3) le driver du jour  4) état des internals (régime, VIX, breadth)  5) agenda (macro + earnings)  6) risques.
+SORTIE : JSON strict, aucun texte autour :
+{"verdict":"...","relais":"...","driver":"...","internals":"...","agenda":"...","risques":"..."}`;
+
+const CATALYST_SYSTEM=`Tu es analyste sur un desk macro/actions. Tu produis le volet catalyseurs du brief matinal indices.
+ENTRÉES (dans le message) : market_state (toile de fond chiffrée), structure (poids indices + graphe pairs + playbook liquidité), scope (indices suivis, date). Utilise l'outil web_search pour trouver les news corporate / M&A / earnings / guidance / géopolitique des dernières 24h sur le scope.
+MÉTHODE : écarte le bruit ; ne retiens que ce qui déplace un titre lourd, un secteur ou le sentiment. Pour chaque catalyseur retenu, déroule la chaîne entité → pairs (via structure) → secteur → indice (via poids) → liquidité → scénarios. Classe par conviction. Max 5 fiches.
+RÈGLES STRICTES :
+- N'utilise QUE les relations et poids présents dans structure. Si absent → "relation non confirmée". N'invente pas de fournisseur/concurrent/poids.
+- Ne cite que des chiffres de market_state ou d'une source news (avec la source). Aucun chiffre fabriqué.
+- surprise : distingue "déjà anticipé/dans la guidance" de "vraie surprise". Indécidable → "indéterminé".
+- horizon : intraday | days | structural. Honnête : ne présente jamais une lame de fond comme un catalyseur de séance.
+- liquidité : applique le playbook de structure selon le type.
+- chaque scénario inclut une invalidation. Tu produis des LECTURES et SCÉNARIOS, jamais des recommandations d'achat/vente.
+SORTIE : tableau JSON strict, aucun texte autour. Schéma par fiche :
+{"headline","entity","type","surprise","horizon","direct_impact":{},"index_transmission":{},"liquidity","scenarios":{"bull","base","bear","invalidation"},"watch":[],"sources":[],"conviction":1}`;
+
+/* ---------- STATE ---------- */
+let MS=null; // market_state courant
+
+/* ---------- VIEWS ---------- */
+const V={};
+
+V.overview=async()=>{
+  $('#view').innerHTML=`<div class="h1">terminal<b>Vue <em>d'ensemble</em></b></div>
+    <p class="sub">Le relais overnight et le régime de risque — la météo des marchés avant l'open européen.</p>
+    <div class="tv"><div class="tradingview-widget-container"><div class="tradingview-widget-container__widget"></div></div></div>
+    <div id="ov"></div>`;
+  mountTicker();
+  const ov=$('#ov'); ov.innerHTML='<div class="empty">Chargement du market_state…</div>';
+  MS=await buildMarketState();
+  paintRegimeBadge(MS);
+  const tiles=arr=>arr.map((x,i)=>`<div class="card tile" style="animation-delay:${i*.04}s">
+      <span class="sym">${x.sym}</span>
+      <span class="val ${x.chg>=0?'up':'down'}">${sign(x.chg)}${fmt(x.chg)}%</span></div>`).join('');
+  const m=(l,v)=>`<div class="metric"><span class="v">${v}</span><span class="l">${l}</span></div>`;
+  const pinPos=((MS.regime.score+3)/6*100);
+  ov.innerHTML=`
+    ${MS.demo?'<div class="banner">Mode démo — aucune clé API configurée. Les chiffres sont illustratifs. Va dans <b>Paramètres</b> pour brancher FRED / Finnhub / FMP et passer en live.</div>':''}
+    <div class="section-h"><h3>Clôture US (hier)</h3><span class="ln"></span></div>
+    <div class="grid g3">${tiles(MS.overnight.us_close)}</div>
+    <div class="section-h"><h3>Asie (nuit)</h3><span class="ln"></span></div>
+    <div class="grid g3">${tiles(MS.overnight.asia)}</div>
+    <div class="section-h"><h3>Futures (ouverture anticipée)</h3><span class="ln"></span></div>
+    <div class="grid g4">${tiles(MS.overnight.futures)}</div>
+    <div class="section-h"><h3>Baromètre de régime</h3><span class="ln"></span></div>
+    <div class="card"><div class="baro">
+      ${m('VIX',fmt(MS.regime.vix,1))}
+      ${m('term structure',MS.regime.vix_term)}
+      ${m('spread HY',fmt(MS.regime.hy_oas,1))}
+      ${m('breadth (RSP/SPY)',MS.regime.rsp_spy)}
+      <div class="scorebar"><div class="pin" style="left:${pinPos}%"></div></div>
+      ${m('score',sign(MS.regime.score)+MS.regime.score)}
+    </div></div>
+    <div class="section-h"><h3>Toile de fond taux</h3><span class="ln"></span></div>
+    <div class="grid g4">
+      <div class="card tile"><span class="sym">US 10Y</span><span class="val">${fmt(MS.backdrop.us10y)}%</span></div>
+      <div class="card tile"><span class="sym">taux réel 10Y</span><span class="val">${fmt(MS.backdrop.real_10y)}%</span></div>
+      <div class="card tile"><span class="sym">courbe 2s10s</span><span class="val">${fmt(MS.backdrop.curve_2s10s)}</span></div>
+      <div class="card tile"><span class="sym">DXY</span><span class="val">${fmt(MS.backdrop.dxy,1)}</span></div>
+    </div>`;
+};
+
+V.brief=async()=>{
+  $('#view').innerHTML=`<div class="h1">desk<b>Morning <em>brief</em></b></div>
+    <p class="sub">Deux couches : les chiffres viennent du market_state (déterministe), l'IA n'écrit que la narration — elle n'invente aucun chiffre.</p>
+    <div class="row" style="margin-bottom:18px">
+      <button class="btn" id="genBrief">☀ Générer le brief</button>
+      <button class="btn ghost" id="refData">↻ Rafraîchir les données</button>
+    </div>
+    <div id="briefOut"></div>`;
+  if(!MS) MS=await buildMarketState(); paintRegimeBadge(MS);
+  renderFactbar();
+  $('#refData').onclick=async()=>{MS=await buildMarketState();paintRegimeBadge(MS);renderFactbar();};
+  $('#genBrief').onclick=genBrief;
+};
+function renderFactbar(){
+  const o=$('#briefOut'); if(!o)return;
+  const f=(l,v)=>`<div class="f"><span class="l">${l}</span><span class="v">${v}</span></div>`;
+  const futAvg=(MS.overnight.futures.reduce((a,b)=>a+b.chg,0)/MS.overnight.futures.length).toFixed(2);
+  o.innerHTML=`<div class="card"><span class="k">couche factuelle · market_state</span>
+    <div class="factbar" style="margin-top:10px">
+      ${f('régime',MS.regime.risk+' ('+sign(MS.regime.score)+MS.regime.score+')')}
+      ${f('VIX',fmt(MS.regime.vix,1)+' · '+MS.regime.vix_term)}
+      ${f('futures moy.',sign(futAvg)+futAvg+'%')}
+      ${f('US 10Y',fmt(MS.backdrop.us10y)+'%')}
+      ${f('taux réel',fmt(MS.backdrop.real_10y)+'%')}
+      ${f('agenda',MS.calendar_today.map(c=>c.time+' '+c.event).join(' · ')||'—')}
+    </div></div>
+    <div id="narr"></div>`;
+}
+async function genBrief(){
+  const btn=$('#genBrief'); const narr=$('#narr');
+  if(!CFG.keys().anthropic){
+    narr.innerHTML=demoBriefHTML(); return;
+  }
+  btn.disabled=true; btn.innerHTML='<span class="spin"></span> génération…';
+  try{
+    const txt=await callClaude({system:BRIEF_SYSTEM,user:JSON.stringify({market_state:MS}),max:1500});
+    const b=parseJSON(txt);
+    narr.innerHTML=briefHTML(b);
+  }catch(e){ narr.innerHTML=`<div class="banner">Échec génération : ${e.message}. Affichage du brief de secours (template).</div>`+demoBriefHTML(); }
+  btn.disabled=false; btn.innerHTML='☀ Régénérer le brief';
+}
+function briefHTML(b){
+  const s=(l,t)=>t?`<div class="brief-sec"><div class="lab">${l}</div><div>${t}</div></div>`:'';
+  return `<div class="card" style="margin-top:14px"><span class="k">couche narrative · IA</span>
+    <div class="brief-sec"><div class="lab">verdict</div><div class="verdict">${b.verdict||''}</div></div>
+    ${s('relais overnight',b.relais)}${s('driver du jour',b.driver)}${s('internals',b.internals)}
+    ${s('agenda',b.agenda)}${s('risques',b.risques)}
+    <div style="color:var(--dim);font-size:11px;font-family:var(--mono);margin-top:10px">généré par ${CFG.model()} · chiffres injectés depuis market_state</div></div>`;
+}
+function demoBriefHTML(){ // secours rule-based depuis le market_state (sans IA)
+  const fut=(MS.overnight.futures.reduce((a,b)=>a+b.chg,0)/MS.overnight.futures.length).toFixed(2);
+  const dir=fut>=0?'en hausse':'en baisse';
+  const b={
+    verdict:`Ouverture européenne attendue ${dir} (futures moy. ${sign(fut)}${fut}%), régime ${MS.regime.risk}.`,
+    relais:`Clôture US : ${MS.overnight.us_close.map(x=>x.sym+' '+sign(x.chg)+x.chg+'%').join(', ')}. Asie : ${MS.overnight.asia.map(x=>x.sym+' '+sign(x.chg)+x.chg+'%').join(', ')}.`,
+    driver:`À surveiller : ${MS.calendar_today.map(c=>c.time+' '+c.event).join(', ')||'pas d\'événement macro majeur'}.`,
+    internals:`VIX ${MS.regime.vix} (${MS.regime.vix_term}), spread HY ${MS.regime.hy_oas}, breadth ${MS.regime.rsp_spy}. Score régime ${sign(MS.regime.score)}${MS.regime.score}.`,
+    agenda:`Earnings : ${(MS.earnings_today||[]).join(', ')||'—'}.`,
+    risques:`Template de secours (sans IA). Configure ta clé Anthropic dans Paramètres pour la narration complète.`
+  };
+  return briefHTML(b);
+}
+
+V.catalysts=async()=>{
+  $('#view').innerHTML=`<div class="h1">intelligence<b>Cataly<em>seurs</em></b></div>
+    <p class="sub">Le moteur : news live (via web_search) → chaîne de transmission → enjeux de liquidité → scénarios. Lectures de desk, pas des recommandations.</p>
+    <div class="row" style="margin-bottom:18px">
+      <button class="btn" id="genCat">⚡ Générer les catalyseurs</button>
+    </div>
+    <div id="catOut"><div class="empty">Clique pour lancer le scan des news et le déroulé des chaînes de transmission.</div></div>`;
+  $('#genCat').onclick=genCatalysts;
+  if(!MS) MS=await buildMarketState();
+};
+async function genCatalysts(){
+  const btn=$('#genCat'),out=$('#catOut');
+  if(!CFG.keys().anthropic){ out.innerHTML='<div class="banner">Mode démo — exemples de fiches. Configure ta clé Anthropic (et active web_search) dans Paramètres pour le live.</div>'+DEMO_CATALYSTS.map(catHTML).join(''); bindCats(); return; }
+  btn.disabled=true; btn.innerHTML='<span class="spin"></span> scan + analyse…';
+  out.innerHTML='<div class="empty">L\'IA recherche les news et déroule les chaînes… (peut prendre 20-40s avec web_search)</div>';
+  try{
+    const user=JSON.stringify({market_state:MS,structure:STRUCTURE,scope:{indices:['CAC40','SX5E','SPX','NDX'],date:new Date().toISOString().slice(0,10)},instruction:'Cherche les news corporate, M&A, earnings, guidance et géopolitique des dernières 24h sur le scope, privilégie Reuters, Bloomberg, Les Échos et communiqués officiels.'});
+    const txt=await callClaude({system:CATALYST_SYSTEM,user,max:3000,search:true});
+    const cats=parseJSON(txt);
+    out.innerHTML=cats.map(catHTML).join(''); bindCats();
+  }catch(e){ out.innerHTML=`<div class="banner">Échec : ${e.message}. Affichage des exemples démo.</div>`+DEMO_CATALYSTS.map(catHTML).join(''); bindCats(); }
+  btn.disabled=false; btn.innerHTML='⚡ Régénérer';
+}
+function convColor(c){c=+c||1;return c>=4?'background:rgba(242,85,90,.15);color:var(--down)':c>=3?'background:rgba(233,178,58,.15);color:var(--gold)':'background:rgba(255,255,255,.06);color:var(--mut)';}
+function catHTML(c){
+  const di=Object.entries(c.direct_impact||{}).map(([k,v])=>{
+    const cls=(''+v).startsWith('+')||(''+v).includes('+')?'pos':(''+v).startsWith('-')||(''+v).includes('- ')?'neg':'';
+    return `<span class="node ${cls}">${k}</span>`;}).join('');
+  const tr=Object.entries(c.index_transmission||{}).map(([k,v])=>`<div class="k2">${k}</div><div>${v}</div>`).join('');
+  const sc=c.scenarios||{};
+  return `<div class="cat"><div class="head">
+      <span class="conv mono" style="${convColor(c.conviction)}">${'★'.repeat(+c.conviction||1)}</span>
+      <div style="flex:1"><div class="ttl">${c.headline||c.entity||''}</div>
+        <div class="meta">
+          <span class="pill">${c.type||''}</span>
+          <span class="pill ${c.surprise==='high'?'h':''}">surprise: ${c.surprise||'—'}</span>
+          <span class="pill ${c.horizon==='structural'?'t':'s'}">${c.horizon||''}</span>
+        </div></div>
+      <span class="chev">▾</span></div>
+    <div class="body">
+      <div class="k2" style="margin-bottom:5px">chaîne de transmission</div>
+      <div class="chain">${di}</div>
+      <div class="kv"><div class="k2">indice</div><div>${Object.entries(c.index_transmission||{}).map(([k,v])=>`<b class="mono">${k}</b> — ${v}`).join('<br>')}</div></div>
+      <div class="kv"><div class="k2">liquidité</div><div>${c.liquidity||'—'}</div></div>
+      <div class="scn">
+        <div class="b bull"><div class="t">bull</div>${sc.bull||'—'}</div>
+        <div class="b base"><div class="t">base</div>${sc.base||'—'}</div>
+        <div class="b bear"><div class="t">bear</div>${sc.bear||'—'}</div>
+        <div class="b inval"><div class="t">invalidation</div>${sc.invalidation||'—'}</div>
+      </div>
+      <div class="kv" style="margin-top:10px"><div class="k2">à surveiller</div><div>${(c.watch||[]).join(' · ')||'—'}</div></div>
+      ${(c.sources||[]).length?`<div style="color:var(--dim);font-size:11px;font-family:var(--mono);margin-top:8px">sources : ${c.sources.join(', ')}</div>`:''}
+    </div></div>`;
+}
+function bindCats(){document.querySelectorAll('.cat .head').forEach(h=>h.onclick=()=>h.parentElement.classList.toggle('open'));}
+
+V.calendar=()=>{
+  $('#view').innerHTML=`<div class="h1">données<b>Calen<em>drier</em></b></div>
+   <p class="sub">Macro + earnings. Le widget Investing pour le visuel, FMP pour les données du moteur (catalyseurs programmés).</p>
+   <div class="card"><span class="k">calendrier économique · Investing (widget)</span>
+   <iframe src="https://sslecal2.investing.com?columns=exc_flags,exc_currency,exc_importance,exc_actual,exc_forecast,exc_previous&importance=2,3&features=datepicker,timezone&countries=72,17,5,4,35&calType=week&timeZone=58&lang=5" width="100%" height="420" frameborder="0" style="border:0;margin-top:10px;border-radius:8px;background:#fff"></iframe></div>
+   <div class="section-h"><h3>Earnings du jour</h3><span class="ln"></span></div>
+   <div class="card">${MS?(MS.earnings_today||[]).map(e=>`<div class="mono" style="padding:4px 0">• ${e}</div>`).join('')||'<span style="color:var(--mut)">aucun (ou non chargé)</span>':'<span style="color:var(--mut)">charge la Vue d\'ensemble d\'abord</span>'}</div>`;
+};
+
+V.breadth=()=>roadmap('Breadth / internals','Advance-decline, % au-dessus de la MM200, new highs/lows, et le proxy RSP/SPY (équipondéré vs capi-pondéré) — déjà calculé dans le baromètre de régime. Module dédié : courbes + heatmap.');
+V.sectors=()=>roadmap('Rotation sectorielle','Heatmap des 11 secteurs (XLK, XLF, XLE…) — l\'équivalent actions de la "force des devises" d\'APEX FX. Quel secteur mène, quel secteur cale.');
+function roadmap(t,d){$('#view').innerHTML=`<div class="h1">roadmap<b>${t}</b></div><p class="sub">${d}</p>
+  <div class="empty">Module v2 — la structure est prévue. La donnée (RSP/SPY) est déjà branchée dans le baromètre de la Vue d'ensemble.</div>`;}
+
+V.journal=()=>{
+  const items=JSON.parse(CFG.get('journal')||'[]');
+  $('#view').innerHTML=`<div class="h1">desk<b>Jour<em>nal</em></b></div>
+   <p class="sub">Documente tes positions sur indices : thèse, conviction, résultat. Stocké en local.</p>
+   <div class="card"><div class="row">
+     <input id="jt" placeholder="ex. Long CAC sur catalyseur Airbus" style="flex:1;min-width:200px;background:var(--bg2);border:1px solid var(--line2);border-radius:6px;padding:9px 11px;color:var(--tx)">
+     <select id="jc" style="background:var(--bg2);border:1px solid var(--line2);border-radius:6px;padding:9px;color:var(--tx);font-family:var(--mono)"><option>conv 1</option><option>conv 2</option><option selected>conv 3</option><option>conv 4</option><option>conv 5</option></select>
+     <button class="btn" id="jadd">+ ajouter</button>
+   </div></div>
+   <div id="jlist" style="margin-top:14px">${items.map((x,i)=>jrow(x,i)).join('')||'<div class="empty">aucune entrée</div>'}</div>`;
+  $('#jadd').onclick=()=>{const t=$('#jt').value.trim();if(!t)return;items.unshift({t,c:$('#jc').value,d:new Date().toLocaleString('fr-FR')});CFG.set('journal',JSON.stringify(items));V.journal();};
+};
+function jrow(x,i){return `<div class="card" style="display:flex;gap:12px;align-items:center;margin-bottom:8px">
+  <span class="conv mono" style="background:rgba(233,178,58,.12);color:var(--gold)">${x.c}</span>
+  <div style="flex:1"><div>${x.t}</div><div style="color:var(--dim);font-size:11px;font-family:var(--mono)">${x.d}</div></div></div>`;}
+
+V.settings=()=>{
+  const k=CFG.keys();
+  const st=v=>v?'<span class="status ok">configurée</span>':'<span class="status no">non configurée</span>';
+  const fld=(id,lab,hint,val,ph)=>`<div class="field"><label>${lab}${st(val)}</label><div class="hint">${hint}</div>
+    <input id="${id}" type="password" placeholder="${ph}" value="${val||''}"></div>`;
+  $('#view').innerHTML=`<div class="h1">config<b>Para<em>mètres</em></b></div>
+   <p class="sub">Toutes les clés restent dans ton navigateur (localStorage). Rien n'est envoyé ailleurs qu'aux API officielles.</p>
+   <div class="card">
+     ${fld('k_anthropic','Clé API Anthropic','Brief + catalyseurs IA. console.anthropic.com/settings/keys',k.anthropic,'sk-ant-…')}
+     <div class="field"><label>Modèle</label>
+       <select id="model">
+         <option value="claude-sonnet-4-6"${CFG.model()==='claude-sonnet-4-6'?' selected':''}>claude-sonnet-4-6 (rapide, recommandé)</option>
+         <option value="claude-opus-4-8"${CFG.model()==='claude-opus-4-8'?' selected':''}>claude-opus-4-8 (le plus puissant)</option>
+       </select></div>
+   </div>
+   <div class="section-h"><h3>Données live (cascade)</h3><span class="ln"></span></div>
+   <div class="card">
+     ${fld('k_fred','FRED — taux & macro (source de vérité)','Gratuit, illimité. fredaccount.stlouisfed.org/apikeys',k.fred,'clé FRED')}
+     ${fld('k_finnhub','Finnhub — indices, VIX, breadth (RSP/SPY)','Gratuit 60 req/min. finnhub.io/register',k.finnhub,'clé Finnhub')}
+     ${fld('k_fmp','FMP — news & calendrier earnings','Gratuit 250 req/jour. financialmodelingprep.com',k.fmp,'clé FMP')}
+     ${fld('k_twelve','Twelve Data — backup prix','Gratuit ~800 req/jour. twelvedata.com/register',k.twelve,'clé Twelve Data')}
+   </div>
+   <div class="row" style="margin-top:6px"><button class="btn" id="save">Enregistrer</button>
+     <button class="btn ghost" id="clear">Tout effacer</button></div>
+   <p style="color:var(--dim);font-size:11.5px;margin-top:14px;font-family:var(--mono)">Sans clé : tout fonctionne en mode démo (chiffres illustratifs + fiches exemples). Avec les clés : market_state live + brief/catalyseurs réels.</p>`;
+  $('#save').onclick=()=>{['k_anthropic','k_fred','k_finnhub','k_fmp','k_twelve'].forEach(id=>CFG.set(id,$('#'+id).value.trim()));CFG.set('model',$('#model').value);MS=null;toast('Enregistré');};
+  $('#clear').onclick=()=>{if(confirm('Effacer toutes les clés et données locales ?')){localStorage.clear();MS=null;V.settings();}};
+};
+function toast(m){const t=document.createElement('div');t.textContent=m;t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--gold);color:#1a1407;padding:10px 18px;border-radius:8px;font-weight:600;z-index:99';document.body.appendChild(t);setTimeout(()=>t.remove(),1600);}
+
+/* ---------- regime badge ---------- */
+function paintRegimeBadge(s){
+  if(!s)return;
+  const col=s.regime.score>=1?'var(--up)':s.regime.score<=-1?'var(--down)':'var(--amb)';
+  $('#regimeBadge').innerHTML=`<span class="dot" style="background:${col};box-shadow:0 0 8px ${col}"></span><span>régime ${s.regime.risk} ${sign(s.regime.score)}${s.regime.score}</span>`;
+}
+
+/* ---------- TradingView ticker ---------- */
+function mountTicker(){
+  const c=$('#view .tradingview-widget-container'); if(!c)return;
+  const s=document.createElement('script');
+  s.src='https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js';s.async=true;
+  s.innerHTML=JSON.stringify({symbols:[
+    {description:'S&P 500',proName:'FOREXCOM:SPXUSD'},{description:'Nasdaq',proName:'NASDAQ:NDX'},
+    {description:'CAC 40',proName:'INDEX:CAC40'},{description:'DAX',proName:'XETR:DAX'},
+    {description:'Nikkei',proName:'INDEX:NKY'},{description:'VIX',proName:'CBOE:VIX'}],
+    colorTheme:'dark',isTransparent:true,displayMode:'compact',locale:'fr'});
+  c.appendChild(s);
+}
+
+/* ---------- ROUTER + chrome ---------- */
+function go(v){
+  document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('on',n.dataset.v===v));
+  $('#side').classList.remove('show');$('#scrim').classList.remove('show');
+  (V[v]||V.overview)();
+  history.replaceState(null,'','#'+v);
+}
+document.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>go(b.dataset.v));
+$('#menubtn').onclick=()=>{$('#side').classList.toggle('show');$('#scrim').classList.toggle('show')};
+$('#scrim').onclick=()=>{$('#side').classList.remove('show');$('#scrim').classList.remove('show')};
+
+function tick(){
+  const now=new Date();
+  $('#cParis').textContent=now.toLocaleTimeString('fr-FR',{timeZone:'Europe/Paris',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  $('#cUtc').textContent=now.toLocaleTimeString('fr-FR',{timeZone:'UTC',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const h=now.getUTCHours()+now.getUTCMinutes()/60, wd=now.getUTCDay()>0&&now.getUTCDay()<6;
+  const ss=[['Asie',wd&&h>=0&&h<6],['Europe',wd&&h>=7&&h<15.5],['US',wd&&h>=14.5&&h<21]];
+  $('#sessions').innerHTML=ss.map(s=>`<span class="sess ${s[1]?'open':''}"><span class="d"></span>${s[0]}</span>`).join('');
+}
+setInterval(tick,1000);tick();
+
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+go((location.hash||'#overview').slice(1));
+</script>
+</body>
+</html>

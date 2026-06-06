@@ -354,7 +354,7 @@ ENTRÉES (dans le message) :
 - sectors : rotation sectorielle live (quel secteur mène/cale).
 - structure : poids indices + graphe pairs + playbook liquidité (complément).
 - scope, date.
-Tu peux compléter avec web_search pour les news non couvertes par intel, mais privilégie intel (déjà daté et chiffré).
+Les faits et chiffres viennent d'intel ; tu peux ajouter du contexte général mais aucun chiffre hors intel/market_state.
 MÉTHODE : écarte le bruit ; ne retiens que ce qui déplace un titre lourd, un secteur ou le sentiment. Pour chaque catalyseur, déroule entité → pairs (intel.entities ou structure) → secteur → indice → liquidité → scénarios. CONTEXTUALISE au tape : précise comment le regime et la rotation du jour amortissent ou amplifient le catalyseur. Classe par conviction. MAXIMUM 4 fiches.
 RÈGLES STRICTES :
 - surprise : si intel.earnings donne estimé vs réalisé, calcule-la FACTUELLEMENT (réalisé > estimé = surprise positive). Sinon "indéterminé". Ne devine pas.
@@ -503,7 +503,7 @@ async function genCatalysts(){
   const btn=$('#genCat'),out=$('#catOut');
   if(!CFG.keys().anthropic){ out.innerHTML='<div class="banner">Clé Anthropic requise pour générer les catalyseurs (recherche web + analyse). Renseigne-la dans <b>Paramètres</b>.</div>'; return; }
   btn.disabled=true; btn.innerHTML='<span class="spin"></span> scan + analyse…';
-  out.innerHTML='<div class="empty">Récupération du feed FMP (news, analystes, résultats) puis analyse… (20-40s)</div>';
+  out.innerHTML='<div class="empty">Analyse du feed FMP (news, analystes, résultats) + chaînes de transmission… (~10s)</div>';
   try{
     // feed FMP via le proxy + contexte tape
     let intel=null; const proxy=CFG.get('proxy').replace(/\/$/,'');
@@ -511,14 +511,14 @@ async function genCatalysts(){
     if(!SB||SB.error){ SB=await fetchSectorBreadth(); }
     const sectors=(SB&&!SB.error&&SB.sectors)?SB.sectors.map(s=>({sym:s.sym,chg:s.chg})):null;
     const user=JSON.stringify({
-      intel:intel||{note:'feed indisponible — utilise web_search'},
+      intel:intel||{note:'feed indisponible'},
       market_state:(MS&&!MS.error)?{regime:MS.regime,overnight:MS.overnight,backdrop:MS.backdrop}:{note:'indisponible'},
       sectors,
       structure:STRUCTURE,
       scope:{indices:['CAC40','SX5E','SPX','NDX'],date:new Date().toISOString().slice(0,10)},
-      instruction:'Base-toi d\'abord sur intel (déjà daté/chiffré). Complète avec web_search si besoin. Contextualise au regime et à la rotation sectorielle du jour.'
+      instruction:'Base ton analyse sur intel (news, grades analystes, surprises, M&A — déjà datés/chiffrés). Contextualise au regime et à la rotation sectorielle du jour.'
     });
-    const txt=await callClaude({system:CATALYST_SYSTEM,user,max:5000,search:true});
+    const txt=await callClaude({system:CATALYST_SYSTEM,user,max:5000,search:false});
     const cats=parseJSON(txt);
     out.innerHTML=cats.length?cats.map(catHTML).join(''):'<div class="empty">Aucun catalyseur significatif retenu sur les dernières 24h.</div>'; bindCats();
   }catch(e){ out.innerHTML=`<div class="banner">Échec : ${e.message}. Réessaie, ou vérifie ta clé / ton crédit Anthropic.</div>`; }

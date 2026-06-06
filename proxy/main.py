@@ -71,6 +71,21 @@ async def fmp_first(cands, client):
             return v
     return None
 
+async def fmp_get(path, params, client):
+    """GET générique sur un endpoint /stable, renvoie une liste ou None."""
+    try:
+        r = await client.get(f"{BASE}/{path}", params={**params, "apikey": FMP}, timeout=15)
+        j = r.json()
+        return j if isinstance(j, list) and j else None
+    except Exception:
+        return None
+
+async def fmp_get_first(paths, params, client):
+    for p in paths:
+        j = await fmp_get(p, params, client)
+        if j: return j
+    return None
+
 async def fred(series, client):
     c = await cget("fred:" + series)
     if c is not None: return c
@@ -190,3 +205,63 @@ async def sector_breadth():
     sectors = [{"sym":s,"name":n,"grp":g,"chg":chg(s)} for s,n,g in SECT if chg(s) is not None]
     return {"demo": False, "freshness": "live" if sectors else "indisponible",
             "sectors": sectors, "spy": chg("SPY"), "rsp": chg("RSP"), "iwm": chg("IWM")}
+
+
+@app.get("/api/intel")
+async def intel():
+    """Feed catalyseurs FMP : news, upgrades/downgrades, surprises de résultats, M&A,
+    + secteur/pairs des sociétés concernées. Tout défensif : ce qui échoue est omis."""
+    c = await cget("intel:today")
+    if c is not None:
+        return c
+    out = {"news": [], "grades": [], "earnings": [], "mna": [], "entities": {}}
+    async with httpx.AsyncClient() as client:
+        news = await fmp_get_first(["news/general-latest", "news/stock-latest"], {"limit": 25, "page": 0}, client)
+        for n in (news or [])[:18]:
+            out["news"].append({"title": n.get("title"), "site": n.get("site") or n.get("publisher"),
+                                "date": n.get("publishedDate") or n.get("date"), "symbol": n.get("symbol")})
+        grades = await fmp_get_first(["grades-latest-news", "grades-news"], {"limit": 25, "page": 0}, client)
+        for g in (grades or [])[:18]:
+            out["grades"].append({"symbol": g.get("symbol"), "action": g.get("action") or g.get("newsType"),
+                                  "from": g.get("previousGrade"), "to": g.get("newGrade"),
+                                  "by": g.get("gradingCompany") or g.get("analystCompany"),
+                                  "date": g.get("publishedDate") or g.get("date")})
+        mna = await fmp_get_first(["mergers-acquisitions-latest"], {"page": 0}, client)
+        for m in (mna or [])[:8]:
+            out["mna"].append({"acquirer": m.get("companyName") or m.get("symbol"),
+                               "target": m.get("targetedCompanyName") or m.get("targetedSymbol"),
+                               "date": m.get("transactionDate") or m.get("acceptedDate")})
+        today = time.strftime("%Y-%m-%d")
+        ec = await fmp_get("earnings-calendar", {"from": today, "to": today}, client)
+        for e in (ec or [])[:20]:
+            est, act = e.get("epsEstimated"), e.get("epsActual")
+            surprise = None
+            try:
+                if est not in (None, 0) and act is not None:
+                    surprise = round((act - est) / abs(est) * 100, 1)
+            except Exception:
+                surprise = None
+            out["earnings"].append({"symbol": e.get("symbol"), "epsEstimated": est,
+                                    "epsActual": act, "surprisePct": surprise})
+        # entités : secteur + pairs pour les tickers cités (grades + earnings), max 8
+        seen = []
+        for x in out["grades"] + out["earnings"]:
+            t = x.get("symbol")
+            if t and t not in seen:
+                seen.append(t)
+        seen = seen[:8]
+        async def ent(t):
+            prof = await fmp_get("profile", {"symbol": t}, client)
+            peers = await fmp_get("stock-peers", {"symbol": t}, client)
+            sector = prof[0].get("sector") if prof else None
+            plist = []
+            if peers:
+                p0 = peers[0]
+                plist = (p0.get("peersList") if isinstance(p0, dict) else None) or \
+                        ([p for p in peers if isinstance(p, str)])
+            return t, {"sector": sector, "peers": (plist or [])[:6]}
+        if seen:
+            for t, v in await asyncio.gather(*[ent(t) for t in seen]):
+                out["entities"][t] = v
+    await cset("intel:today", out, 1800)
+    return out

@@ -1,10 +1,10 @@
 """
 APEX · indices — proxy de données (FastAPI)
-Quotes via FMP (Premium, temps réel) : indices, ETF, secteurs, futures ES/NQ, VIX.
-Taux via FRED. Calendrier/news via FMP. Cache Redis ou mémoire.
+Quotes via FMP STABLE API (/stable/quote) : indices, ETF, secteurs, futures, VIX.
+Taux via FRED. Calendrier via FMP /stable. Cache Redis ou mémoire.
 Jamais de données factices : un champ indisponible vaut null.
 """
-import os, json, time, asyncio, urllib.parse
+import os, json, time, asyncio
 import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,8 +16,8 @@ REDIS_URL = os.getenv("REDIS_URL", "")
 TTL_QUOTE = int(os.getenv("TTL_QUOTE", "90"))
 TTL_RATE  = int(os.getenv("TTL_RATE",  "3600"))
 TTL_CAL   = int(os.getenv("TTL_CAL",   "21600"))
+BASE = "https://financialmodelingprep.com/stable"
 
-# ---------- cache ----------
 _r = None
 if REDIS_URL:
     try:
@@ -34,30 +34,34 @@ async def cset(k, val, ttl):
     if _r: await _r.set(k, json.dumps(val), ex=ttl)
     else: _mem[k] = (time.time() + ttl, val)
 
-# ---------- FMP quotes (1 appel batché, cache par symbole) ----------
+# ---------- FMP /stable/quote (un appel par symbole, concurrent) ----------
+async def fmp_quote_one(sym, client):
+    c = await cget("q:" + sym)
+    if c is not None:
+        return c
+    try:
+        r = await client.get(f"{BASE}/quote", params={"symbol": sym, "apikey": FMP}, timeout=12)
+        d = r.json()
+        q = d[0] if isinstance(d, list) and d else (d if isinstance(d, dict) and d.get("symbol") else None)
+        if not q:
+            return None
+        cp = q.get("changePercentage", q.get("changesPercentage"))
+        if cp is None:
+            return None
+        val = {"chg": round(float(cp), 2),
+               "price": float(q["price"]) if q.get("price") is not None else None}
+        await cset("q:" + sym, val, TTL_QUOTE)
+        return val
+    except Exception:
+        return None
+
 async def fmp_quotes(symbols, client):
-    out, todo = {}, []
-    for s in symbols:
-        c = await cget("q:" + s)
-        if c is not None: out[s] = c
-        else: todo.append(s)
-    if todo:
-        joined = ",".join(urllib.parse.quote(s, safe="") for s in todo)
-        try:
-            r = await client.get(f"https://financialmodelingprep.com/api/v3/quote/{joined}",
-                                 params={"apikey": FMP}, timeout=15)
-            got = {}
-            for q in (r.json() or []):
-                sym, cp = q.get("symbol"), q.get("changesPercentage")
-                if sym is not None and cp is not None:
-                    got[sym] = {"chg": round(float(cp), 2),
-                                "price": float(q["price"]) if q.get("price") is not None else None}
-            for s in todo:
-                out[s] = got.get(s)
-                if got.get(s) is not None: await cset("q:" + s, got[s], TTL_QUOTE)
-        except Exception:
-            for s in todo: out[s] = None
-    return out
+    sem = asyncio.Semaphore(10)
+    async def one(s):
+        async with sem:
+            return s, await fmp_quote_one(s, client)
+    res = await asyncio.gather(*[one(s) for s in symbols])
+    return {s: v for s, v in res}
 
 async def fred(series, client):
     c = await cget("fred:" + series)
@@ -77,7 +81,7 @@ async def fmp_calendar(client):
     today = time.strftime("%Y-%m-%d")
     res = {"macro": [], "earnings": []}
     try:
-        r = await client.get("https://financialmodelingprep.com/api/v3/economic_calendar",
+        r = await client.get(f"{BASE}/economic-calendar",
                              params={"from": today, "to": today, "apikey": FMP}, timeout=15)
         for e in (r.json() or []):
             if e.get("impact") in ("High", "Medium"):
@@ -85,7 +89,7 @@ async def fmp_calendar(client):
                                      "impact": (e.get("impact") or "").lower()})
     except Exception: pass
     try:
-        r = await client.get("https://financialmodelingprep.com/api/v3/earning_calendar",
+        r = await client.get(f"{BASE}/earnings-calendar",
                              params={"from": today, "to": today, "apikey": FMP}, timeout=15)
         res["earnings"] = [e.get("symbol") for e in (r.json() or [])][:12]
     except Exception: pass
@@ -109,6 +113,16 @@ app.add_middleware(CORSMiddleware, allow_origins=ORIGINS or ["*"],
 @app.get("/api/health")
 async def health():
     return {"ok": True, "redis": bool(_r), "keys": {"fmp": bool(FMP), "fred": bool(FRED)}}
+
+@app.get("/api/debug")
+async def debug():
+    """Diagnostic : montre la réponse brute FMP pour un symbole (sans la clé)."""
+    async with httpx.AsyncClient() as client:
+        try:
+            r = await client.get(f"{BASE}/quote", params={"symbol": "AAPL", "apikey": FMP}, timeout=12)
+            return {"status": r.status_code, "body": r.json()}
+        except Exception as e:
+            return {"error": str(e)}
 
 @app.get("/api/market_state")
 async def market_state():

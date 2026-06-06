@@ -63,6 +63,14 @@ async def fmp_quotes(symbols, client):
     res = await asyncio.gather(*[one(s) for s in symbols])
     return {s: v for s, v in res}
 
+async def fmp_first(cands, client):
+    """Renvoie la 1re quote non nulle parmi des symboles candidats (auto-découverte)."""
+    for sym in cands:
+        v = await fmp_quote_one(sym, client)
+        if v is not None:
+            return v
+    return None
+
 async def fred(series, client):
     c = await cget("fred:" + series)
     if c is not None: return c
@@ -115,12 +123,12 @@ async def health():
     return {"ok": True, "redis": bool(_r), "keys": {"fmp": bool(FMP), "fred": bool(FRED)}}
 
 @app.get("/api/debug")
-async def debug():
-    """Diagnostic : montre la réponse brute FMP pour un symbole (sans la clé)."""
+async def debug(symbol: str = "AAPL"):
+    """Diagnostic : réponse brute FMP pour un symbole. Ex: /api/debug?symbol=DXY"""
     async with httpx.AsyncClient() as client:
         try:
-            r = await client.get(f"{BASE}/quote", params={"symbol": "AAPL", "apikey": FMP}, timeout=12)
-            return {"status": r.status_code, "body": r.json()}
+            r = await client.get(f"{BASE}/quote", params={"symbol": symbol, "apikey": FMP}, timeout=12)
+            return {"symbol": symbol, "status": r.status_code, "body": r.json()}
         except Exception as e:
             return {"error": str(e)}
 
@@ -129,18 +137,23 @@ async def market_state():
     fr = {}
     async with httpx.AsyncClient() as client:
         qs = await fmp_quotes(["^GSPC","^IXIC","^DJI","^N225","^HSI",
-                               "ESUSD","NQUSD","YMUSD","^GDAXI","^FCHI",
+                               "ESUSD","^GDAXI","^FCHI",
                                "^VIX","RSP","SPY","CLUSD"], client)
         t10, r10, t2, hy = await asyncio.gather(
             fred("DGS10", client), fred("DFII10", client),
             fred("DGS2", client), fred("BAMLH0A0HYM2", client))
+        nqv  = await fmp_first(["NQUSD","NQ","NDXUSD"], client)
+        ymv  = await fmp_first(["YMUSD","YM","DJIUSD"], client)
+        dxyv = await fmp_first(["DXY","^DXY","USDX","DXUSD","DX"], client)
         cal = await fmp_calendar(client)
     def chg(s): return qs[s]["chg"] if qs.get(s) else None
     def px(s):  return qs[s]["price"] if qs.get(s) else None
     us   = [{"sym":"S&P 500","chg":chg("^GSPC")},{"sym":"Nasdaq 100","chg":chg("^IXIC")},{"sym":"Dow","chg":chg("^DJI")}]
     asia = [a for a in [{"sym":"Nikkei","chg":chg("^N225")},{"sym":"Hang Seng","chg":chg("^HSI")}] if a["chg"] is not None]
-    fut  = [f for f in [{"sym":"ES (S&P)","chg":chg("ESUSD")},{"sym":"NQ (Nasdaq)","chg":chg("NQUSD")},
-                        {"sym":"YM (Dow)","chg":chg("YMUSD")},{"sym":"DAX (cash)","chg":chg("^GDAXI")},
+    fut  = [f for f in [{"sym":"ES (S&P)","chg":chg("ESUSD")},
+                        {"sym":"NQ (Nasdaq)","chg":(nqv["chg"] if nqv else None)},
+                        {"sym":"YM (Dow)","chg":(ymv["chg"] if ymv else None)},
+                        {"sym":"DAX (cash)","chg":chg("^GDAXI")},
                         {"sym":"CAC (cash)","chg":chg("^FCHI")}] if f["chg"] is not None]
     fr["indices"]="live" if any(x["chg"] is not None for x in us) else "indisponible"
     fr["futures"]="live" if fut else "indisponible"
@@ -161,7 +174,7 @@ async def market_state():
         "futures_note": "Futures ES/NQ/YM via FMP. DAX/CAC en cash (futures Eurex non couverts).",
         "backdrop": {"us10y": t10, "real_10y": r10,
                      "curve_2s10s": round(t10-t2,2) if (t10 is not None and t2 is not None) else None,
-                     "dxy": None, "oil": px("CLUSD")},
+                     "dxy": (round(dxyv["price"],2) if (dxyv and dxyv.get("price")) else None), "oil": px("CLUSD")},
         "calendar_today": cal["macro"], "earnings_today": cal["earnings"], "news_top": [],
     }
 

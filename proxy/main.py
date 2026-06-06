@@ -170,6 +170,7 @@ async def market_state():
     return {
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "demo": False, "freshness": fr,
+        "regime": regime,
         "overnight": {"us_close": us, "asia": asia, "futures": fut},
         "futures_note": "Futures ES/NQ/YM via FMP. DAX/CAC en cash (futures Eurex non couverts).",
         "backdrop": {"us10y": t10, "real_10y": r10,

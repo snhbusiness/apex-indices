@@ -319,11 +319,21 @@ async function callClaude({system,user,max=1800,search=false}){
   const d=await r.json();
   return d.content.filter(c=>c.type==='text').map(c=>c.text).join('\n').trim();
 }
-function parseJSON(txt){ // tolère ```json
-  const c=txt.replace(/```json|```/g,'').trim();
+function parseJSON(txt){ // tolère ```json, prose autour, et JSON tronqué
+  let c=txt.replace(/```json|```/g,'').trim();
   const a=c.indexOf('['),o=c.indexOf('{');
-  const start=(a>=0&&(a<o||o<0))?a:o; const end=Math.max(c.lastIndexOf(']'),c.lastIndexOf('}'));
-  return JSON.parse(c.slice(start,end+1));
+  let start=(a>=0&&(a<o||o<0))?a:o; if(start<0)start=0;
+  c=c.slice(start);
+  const isArr=c[0]==='[';
+  try{ return JSON.parse(c.slice(0,Math.max(c.lastIndexOf(']'),c.lastIndexOf('}'))+1)); }catch(e){}
+  // réparation : JSON tronqué → on coupe après le dernier objet complet et on referme
+  const lastObj=c.lastIndexOf('}');
+  if(lastObj>0){
+    let frag=c.slice(0,lastObj+1);
+    if(isArr) frag+=']';
+    try{ return JSON.parse(frag); }catch(e){}
+  }
+  throw new Error('JSON illisible (réponse tronquée)');
 }
 
 /* ---------- PROMPTS ---------- */
@@ -338,16 +348,21 @@ SORTIE : JSON strict, aucun texte autour :
 {"verdict":"...","relais":"...","driver":"...","internals":"...","agenda":"...","risques":"..."}`;
 
 const CATALYST_SYSTEM=`Tu es analyste sur un desk macro/actions. Tu produis le volet catalyseurs du brief matinal indices.
-ENTRÉES (dans le message) : market_state (toile de fond chiffrée), structure (poids indices + graphe pairs + playbook liquidité), scope (indices suivis, date). Utilise l'outil web_search pour trouver les news corporate / M&A / earnings / guidance / géopolitique des dernières 24h sur le scope.
-MÉTHODE : écarte le bruit ; ne retiens que ce qui déplace un titre lourd, un secteur ou le sentiment. Pour chaque catalyseur retenu, déroule la chaîne entité → pairs (via structure) → secteur → indice (via poids) → liquidité → scénarios. Classe par conviction. Max 5 fiches.
+ENTRÉES (dans le message) :
+- intel : feed FMP du jour (news, upgrades/downgrades analystes, surprises de résultats avec estimé vs réalisé, M&A, + secteur/pairs des sociétés). C'est ta SOURCE PRIMAIRE.
+- market_state : toile de fond chiffrée + regime (risk-on/off) du jour.
+- sectors : rotation sectorielle live (quel secteur mène/cale).
+- structure : poids indices + graphe pairs + playbook liquidité (complément).
+- scope, date.
+Tu peux compléter avec web_search pour les news non couvertes par intel, mais privilégie intel (déjà daté et chiffré).
+MÉTHODE : écarte le bruit ; ne retiens que ce qui déplace un titre lourd, un secteur ou le sentiment. Pour chaque catalyseur, déroule entité → pairs (intel.entities ou structure) → secteur → indice → liquidité → scénarios. CONTEXTUALISE au tape : précise comment le regime et la rotation du jour amortissent ou amplifient le catalyseur. Classe par conviction. MAXIMUM 4 fiches.
 RÈGLES STRICTES :
-- N'utilise QUE les relations et poids présents dans structure. Si absent → "relation non confirmée". N'invente pas de fournisseur/concurrent/poids.
-- Ne cite que des chiffres de market_state ou d'une source news (avec la source). Aucun chiffre fabriqué.
-- surprise : distingue "déjà anticipé/dans la guidance" de "vraie surprise". Indécidable → "indéterminé".
-- horizon : intraday | days | structural. Honnête : ne présente jamais une lame de fond comme un catalyseur de séance.
-- liquidité : applique le playbook de structure selon le type.
-- chaque scénario inclut une invalidation. Tu produis des LECTURES et SCÉNARIOS, jamais des recommandations d'achat/vente.
-SORTIE : tableau JSON strict, aucun texte autour. Schéma par fiche :
+- surprise : si intel.earnings donne estimé vs réalisé, calcule-la FACTUELLEMENT (réalisé > estimé = surprise positive). Sinon "indéterminé". Ne devine pas.
+- N'invente pas de pair/poids absent de intel.entities ou structure → sinon "relation non confirmée".
+- Ne cite que des chiffres présents dans les entrées. Aucun chiffre fabriqué.
+- horizon : intraday | days | structural. Ne présente jamais une lame de fond comme un catalyseur de séance.
+- liquidité : applique le playbook selon le type. Chaque scénario inclut une invalidation. LECTURES et SCÉNARIOS, jamais de recommandation d'achat/vente.
+SORTIE : UNIQUEMENT un tableau JSON, aucun texte/markdown/citation autour, rien avant ni après le [ ]. Sois concis (phrases courtes) pour ne pas dépasser. Schéma par fiche :
 {"headline","entity","type","surprise","horizon","direct_impact":{},"index_transmission":{},"liquidity","scenarios":{"bull","base","bear","invalidation"},"watch":[],"sources":[],"conviction":1}`;
 
 /* ---------- STATE ---------- */
@@ -488,10 +503,22 @@ async function genCatalysts(){
   const btn=$('#genCat'),out=$('#catOut');
   if(!CFG.keys().anthropic){ out.innerHTML='<div class="banner">Clé Anthropic requise pour générer les catalyseurs (recherche web + analyse). Renseigne-la dans <b>Paramètres</b>.</div>'; return; }
   btn.disabled=true; btn.innerHTML='<span class="spin"></span> scan + analyse…';
-  out.innerHTML='<div class="empty">L\'IA recherche les news et déroule les chaînes… (peut prendre 20-40s avec web_search)</div>';
+  out.innerHTML='<div class="empty">Récupération du feed FMP (news, analystes, résultats) puis analyse… (20-40s)</div>';
   try{
-    const user=JSON.stringify({market_state:(MS&&!MS.error)?MS:{note:'market_state indisponible'},structure:STRUCTURE,scope:{indices:['CAC40','SX5E','SPX','NDX'],date:new Date().toISOString().slice(0,10)},instruction:'Cherche les news corporate, M&A, earnings, guidance et géopolitique des dernières 24h sur le scope, privilégie Reuters, Bloomberg, Les Échos et communiqués officiels.'});
-    const txt=await callClaude({system:CATALYST_SYSTEM,user,max:3000,search:true});
+    // feed FMP via le proxy + contexte tape
+    let intel=null; const proxy=CFG.get('proxy').replace(/\/$/,'');
+    if(proxy){ try{ intel=await jget(proxy+'/api/intel'); }catch(e){} }
+    if(!SB||SB.error){ SB=await fetchSectorBreadth(); }
+    const sectors=(SB&&!SB.error&&SB.sectors)?SB.sectors.map(s=>({sym:s.sym,chg:s.chg})):null;
+    const user=JSON.stringify({
+      intel:intel||{note:'feed indisponible — utilise web_search'},
+      market_state:(MS&&!MS.error)?{regime:MS.regime,overnight:MS.overnight,backdrop:MS.backdrop}:{note:'indisponible'},
+      sectors,
+      structure:STRUCTURE,
+      scope:{indices:['CAC40','SX5E','SPX','NDX'],date:new Date().toISOString().slice(0,10)},
+      instruction:'Base-toi d\'abord sur intel (déjà daté/chiffré). Complète avec web_search si besoin. Contextualise au regime et à la rotation sectorielle du jour.'
+    });
+    const txt=await callClaude({system:CATALYST_SYSTEM,user,max:5000,search:true});
     const cats=parseJSON(txt);
     out.innerHTML=cats.length?cats.map(catHTML).join(''):'<div class="empty">Aucun catalyseur significatif retenu sur les dernières 24h.</div>'; bindCats();
   }catch(e){ out.innerHTML=`<div class="banner">Échec : ${e.message}. Réessaie, ou vérifie ta clé / ton crédit Anthropic.</div>`; }

@@ -80,6 +80,27 @@ async def fmp_first_valid(cands, client, ok):
             return v
     return None
 
+# ---------- Yahoo Finance (futures live que FMP n'a pas : NQ, YM, Russell...) ----------
+YH_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; ApexProxy/1.0)"}
+async def yahoo_quote(sym, client):
+    c = await cget("yq:" + sym)
+    if c is not None:
+        return c
+    try:
+        r = await client.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}",
+                             params={"range": "1d", "interval": "1d"},
+                             headers=YH_HEADERS, timeout=12)
+        meta = r.json()["chart"]["result"][0]["meta"]
+        price = meta.get("regularMarketPrice")
+        prev = meta.get("chartPreviousClose") or meta.get("previousClose")
+        if price is None or not prev:
+            return None
+        val = {"chg": round((price/prev - 1)*100, 2), "price": float(price)}
+        await cset("yq:" + sym, val, TTL_QUOTE)
+        return val
+    except Exception:
+        return None
+
 async def fmp_get(path, params, client):
     """GET générique sur un endpoint /stable, renvoie une liste ou None."""
     try:
@@ -277,3 +298,10 @@ async def intel():
                 out["entities"][t] = v
     await cset("intel:today", out, 1800)
     return out
+
+@app.get("/api/yahoo")
+async def yahoo_debug(symbol: str = "ES=F"):
+    """Test Yahoo : /api/yahoo?symbol=NQ=F"""
+    async with httpx.AsyncClient() as client:
+        v = await yahoo_quote(symbol, client)
+        return {"symbol": symbol, "quote": v}

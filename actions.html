@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0C0C0F" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="APEX Actions" />
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<title>APEX · Actions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --ink:#0C0C0F; --ink-2:#101015; --panel:#14141A; --panel-2:#181820;
+    --line:#23232E; --line-2:#2E2E3A;
+    --txt:#ECECEF; --muted:#8A8A95; --faint:#5A5A66;
+    --gold:#D4AF61; --gold-dim:#9A7F44;
+    --teal:#3FA7A1; --teal-dim:#2A726E;
+    --green:#34D39A; --red:#F2555A; --amber:#E0A84B;
+    --shadow:0 18px 50px -20px rgba(0,0,0,.8);
+    --r:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{background:var(--ink);color:var(--txt)}
+  body{
+    font-family:'Archivo',system-ui,sans-serif;
+    font-size:15px;line-height:1.45;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    background:
+      radial-gradient(1200px 500px at 80% -10%, rgba(212,175,97,.06), transparent 60%),
+      radial-gradient(900px 400px at -10% 10%, rgba(63,167,161,.05), transparent 55%),
+      var(--ink);
+    min-height:100vh;
+  }
+  .wrap{max-width:760px;margin:0 auto;padding:0 14px 60px}
+  .mono{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}
+  .disp{font-family:'Fraunces',serif}
+
+  /* ---------- header ---------- */
+  header{display:flex;align-items:center;gap:12px;padding:18px 2px 14px;position:sticky;top:0;z-index:20;
+    background:linear-gradient(var(--ink) 70%,transparent);backdrop-filter:blur(6px)}
+  .brand{display:flex;align-items:baseline;gap:9px}
+  .brand b{font-family:'Fraunces',serif;font-weight:600;font-size:22px;letter-spacing:.3px}
+  .brand .dot{color:var(--gold)}
+  .brand span{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:2px}
+  .spacer{flex:1}
+  .icon-btn{width:38px;height:38px;border-radius:11px;border:1px solid var(--line);background:var(--panel);
+    color:var(--txt);display:grid;place-items:center;font-size:17px;cursor:pointer;transition:.15s}
+  .icon-btn:active{transform:scale(.94)}
+  .icon-btn.live{border-color:var(--teal-dim)}
+
+  .tag{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--faint)}
+
+  /* ---------- controls ---------- */
+  .controls{display:flex;flex-direction:column;gap:10px;margin-bottom:14px}
+  .tabs{display:flex;gap:6px;background:var(--ink-2);border:1px solid var(--line);border-radius:12px;padding:4px}
+  .tabs button{flex:1;border:0;background:transparent;color:var(--muted);font-family:inherit;font-weight:600;
+    font-size:13px;padding:9px 4px;border-radius:9px;cursor:pointer;transition:.15s}
+  .tabs button.on{background:var(--panel-2);color:var(--txt);box-shadow:inset 0 0 0 1px var(--line-2)}
+  .row{display:flex;gap:10px;align-items:center}
+  select,input,textarea{font-family:inherit}
+  .profile{flex:1;background:var(--panel);border:1px solid var(--line);color:var(--txt);border-radius:11px;
+    padding:11px 12px;font-size:13px;font-weight:500;appearance:none;cursor:pointer}
+  .gen{flex:0 0 auto;border:0;border-radius:11px;padding:0 18px;height:44px;cursor:pointer;
+    font-family:'Archivo';font-weight:700;font-size:14px;letter-spacing:.3px;color:#1A1407;
+    background:linear-gradient(135deg,var(--gold),#E8C57C);box-shadow:0 6px 22px -8px rgba(212,175,97,.7);transition:.15s}
+  .gen:active{transform:translateY(1px)}
+  .gen:disabled{filter:grayscale(.6) brightness(.7);cursor:default}
+  .meta{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--faint)}
+
+  /* ---------- progress ---------- */
+  .progress{border:1px solid var(--line);background:var(--panel);border-radius:var(--r);padding:14px;margin-bottom:16px}
+  .steps{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
+  .step{font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.5px;padding:5px 9px;border-radius:7px;
+    border:1px solid var(--line);color:var(--faint)}
+  .step.run{color:var(--gold);border-color:var(--gold-dim)}
+  .step.done{color:var(--teal);border-color:var(--teal-dim)}
+  .bar{height:4px;border-radius:3px;background:var(--line);overflow:hidden}
+  .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--teal),var(--gold));transition:width .3s}
+  .plog{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);margin-top:8px;min-height:16px}
+
+  /* ---------- cards ---------- */
+  .sec-title{display:flex;align-items:center;gap:10px;margin:22px 2px 12px}
+  .sec-title h2{font-family:'Fraunces',serif;font-weight:600;font-size:18px}
+  .sec-title .c{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--faint)}
+  .sec-title .ln{flex:1;height:1px;background:var(--line)}
+
+  .card{border:1px solid var(--line);background:linear-gradient(180deg,var(--panel),var(--ink-2));
+    border-radius:var(--r);padding:15px;margin-bottom:13px;box-shadow:var(--shadow);position:relative;overflow:hidden;
+    opacity:0;transform:translateY(10px);animation:rise .5s forwards}
+  @keyframes rise{to{opacity:1;transform:none}}
+  .card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--gold);opacity:.5}
+  .card.c5::before{background:var(--green)} .card.c4::before{background:var(--teal)}
+  .card.c3::before{background:var(--gold)} .card.c2::before{background:var(--amber)} .card.c1::before{background:var(--red)}
+
+  .chead{display:flex;align-items:flex-start;gap:11px}
+  .rank{font-family:'Fraunces',serif;font-size:24px;font-weight:600;color:var(--gold);line-height:1;min-width:30px}
+  .who{flex:1;min-width:0}
+  .tk{font-family:'JetBrains Mono',monospace;font-weight:600;font-size:16px;letter-spacing:.5px}
+  .nm{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pill{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.5px;text-transform:uppercase;
+    padding:3px 7px;border-radius:6px;border:1px solid var(--line-2);color:var(--muted);margin-top:5px}
+  .scorebox{text-align:right;flex:0 0 auto}
+  .scorebox .s{font-family:'Fraunces',serif;font-size:26px;font-weight:600}
+  .scorebox .l{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--faint);text-transform:uppercase;letter-spacing:1px}
+  .conv{display:flex;gap:3px;justify-content:flex-end;margin-top:4px}
+  .conv i{width:7px;height:7px;border-radius:2px;background:var(--line-2)}
+  .conv i.on{background:var(--gold)}
+  .conv.k5 i.on{background:var(--green)} .conv.k4 i.on{background:var(--teal)}
+  .conv.k2 i.on{background:var(--amber)} .conv.k1 i.on{background:var(--red)}
+
+  .thesis{font-size:13.5px;color:#D5D5DD;margin:11px 0 0;line-height:1.5}
+  .thesis em{color:var(--gold);font-style:normal}
+
+  .facs{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:12px 0 2px}
+  .fac{background:var(--ink-2);border:1px solid var(--line);border-radius:9px;padding:7px 8px}
+  .fac .fl{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--faint);text-transform:uppercase;letter-spacing:.5px}
+  .fac .fb{height:4px;border-radius:3px;background:var(--line);margin-top:5px;overflow:hidden}
+  .fac .fb i{display:block;height:100%;background:var(--teal)}
+  .fac .fv{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--txt);margin-top:3px}
+
+  .metrics{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
+  .m{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--ink-2);border:1px solid var(--line);
+    border-radius:7px;padding:5px 8px;color:var(--muted)}
+  .m b{color:var(--txt);font-weight:500}
+  .m .up{color:var(--green)} .m .dn{color:var(--red)}
+
+  .levels{margin-top:12px;border-top:1px dashed var(--line);padding-top:11px}
+  .lgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .lv{background:var(--ink-2);border:1px solid var(--line);border-radius:9px;padding:8px 9px}
+  .lv .t{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.5px;text-transform:uppercase;color:var(--faint)}
+  .lv .v{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;margin-top:2px}
+  .lv.agg{border-color:var(--teal-dim)} .lv.lim{border-color:var(--gold-dim)}
+  .lv.sl .v{color:var(--red)} .lv.tp .v{color:var(--green)}
+  .rr{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .chip{font-family:'JetBrains Mono',monospace;font-size:11px;padding:5px 9px;border-radius:7px;border:1px solid var(--line-2);color:var(--muted)}
+  .chip b{color:var(--txt)}
+  .chip.cat{border-color:var(--gold-dim);color:var(--gold)}
+  .chip.warn{border-color:var(--red);color:var(--red)}
+
+  .foot{display:flex;align-items:center;gap:10px;margin-top:12px}
+  .lk{flex:1;text-align:center;font-family:'JetBrains Mono',monospace;font-size:11.5px;letter-spacing:.5px;
+    text-decoration:none;color:var(--teal);border:1px solid var(--teal-dim);border-radius:9px;padding:9px;background:rgba(63,167,161,.05)}
+  .lk:active{background:rgba(63,167,161,.13)}
+  .acc{flex:0 0 auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);border:1px solid var(--line);
+    background:var(--ink-2);border-radius:9px;padding:9px 12px;cursor:pointer}
+  .cascade{display:none;margin-top:11px;border-top:1px dashed var(--line);padding-top:11px}
+  .cascade.open{display:block}
+  .c8{font-size:12.5px;color:#C7C7CF;margin-bottom:7px;line-height:1.45}
+  .c8 b{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.5px;text-transform:uppercase;color:var(--gold);display:block;margin-bottom:1px}
+
+  .lowconf{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--amber);
+    border:1px solid var(--amber);border-radius:6px;padding:2px 6px;margin-left:6px;letter-spacing:.5px}
+
+  /* ---------- empty / error ---------- */
+  .note{border:1px solid var(--line);background:var(--panel);border-radius:var(--r);padding:18px;color:var(--muted);font-size:13.5px;line-height:1.55}
+  .note b{color:var(--txt)}
+  .err{border-color:var(--red);color:#F3B9BC}
+
+  /* ---------- settings ---------- */
+  .ov{position:fixed;inset:0;background:rgba(6,6,9,.72);backdrop-filter:blur(4px);z-index:50;display:none;align-items:flex-end;justify-content:center}
+  .ov.open{display:flex}
+  .sheet{width:100%;max-width:760px;background:var(--panel);border:1px solid var(--line);border-radius:18px 18px 0 0;
+    padding:20px 18px calc(26px + env(safe-area-inset-bottom));max-height:90vh;overflow:auto}
+  .sheet h3{font-family:'Fraunces',serif;font-weight:600;font-size:19px;margin-bottom:4px}
+  .sheet .sub{font-size:12px;color:var(--muted);margin-bottom:16px}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px}
+  .field input,.field select{width:100%;background:var(--ink-2);border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:11px 12px;font-size:14px}
+  .field .hint{font-size:11px;color:var(--faint);margin-top:5px;line-height:1.4}
+  .toggle{display:flex;align-items:center;justify-content:space-between;background:var(--ink-2);border:1px solid var(--line);border-radius:10px;padding:11px 12px}
+  .sw{width:44px;height:26px;border-radius:14px;background:var(--line-2);position:relative;cursor:pointer;transition:.2s;flex:0 0 auto}
+  .sw i{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.2s}
+  .sw.on{background:var(--teal)} .sw.on i{left:21px}
+  .save{width:100%;border:0;border-radius:11px;padding:13px;margin-top:6px;font-family:'Archivo';font-weight:700;font-size:14px;
+    color:#1A1407;background:linear-gradient(135deg,var(--gold),#E8C57C);cursor:pointer}
+  .closex{float:right;color:var(--muted);font-size:22px;cursor:pointer;line-height:1}
+
+  footer{margin-top:26px;text-align:center;font-size:11px;color:var(--faint);line-height:1.6}
+  footer b{color:var(--muted)}
+  .upd{position:fixed;left:14px;right:14px;bottom:14px;max-width:732px;margin:0 auto;background:var(--panel-2);
+    border:1px solid var(--gold-dim);border-radius:12px;padding:12px 14px;display:none;align-items:center;gap:12px;z-index:60}
+  .upd.show{display:flex}
+  .upd span{flex:1;font-size:13px}
+  .upd button{border:0;background:var(--gold);color:#1A1407;font-weight:700;border-radius:8px;padding:8px 12px;cursor:pointer;font-family:'Archivo'}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <b>APEX<span class="dot disp">.</span></b><span>Actions</span>
+    </div>
+    <div class="spacer"></div>
+    <button class="icon-btn" id="btnSettings" title="Paramètres">⚙</button>
+  </header>
+
+  <div class="controls">
+    <div class="tabs" id="tabs">
+      <button data-idx="all" class="on">Tous</button>
+      <button data-idx="cac40">CAC 40</button>
+      <button data-idx="sp500">S&amp;P 500</button>
+    </div>
+    <div class="row">
+      <select class="profile" id="profile" title="Profil de pondération">
+        <option value="balanced">⚖️ Équilibré — momentum · value · qualité · croissance</option>
+        <option value="momentum">📈 Momentum &amp; tendance dominants</option>
+        <option value="value">💎 Value &amp; qualité dominants</option>
+        <option value="growth">🌱 Croissance dominante</option>
+      </select>
+      <button class="gen" id="btnGen">Générer</button>
+    </div>
+    <div class="meta">
+      <span class="tag" id="status">Prêt</span>
+      <span id="updated"></span>
+    </div>
+  </div>
+
+  <div id="progress" class="progress" style="display:none">
+    <div class="steps" id="steps"></div>
+    <div class="bar"><i id="barFill"></i></div>
+    <div class="plog" id="plog"></div>
+  </div>
+
+  <div id="output"></div>
+
+  <footer>
+    <div><b>Couche déterministe (FMP) + narration IA.</b> L'IA classe et explique, elle n'invente aucun chiffre.</div>
+    <div>Analyse, pas conseil financier. Vous restez seul maître des positions — aucune exécution d'ordre, aucune connexion broker.</div>
+    <div class="tag" id="cacheTag" style="margin-top:8px"></div>
+  </footer>
+</div>
+
+<!-- Update toast -->
+<div class="upd" id="updToast"><span>Nouvelle version disponible.</span><button id="updBtn">Mettre à jour</button></div>
+
+<!-- Settings -->
+<div class="ov" id="ov">
+  <div class="sheet">
+    <span class="closex" id="closeSettings">×</span>
+    <h3>Paramètres</h3>
+    <div class="sub">Clés stockées en local sur cet appareil (localStorage). Jamais envoyées ailleurs qu'aux API officielles.</div>
+
+    <div class="field">
+      <label>Clé Anthropic (x-api-key)</label>
+      <input type="password" id="kAnthropic" placeholder="sk-ant-..." autocomplete="off" />
+    </div>
+    <div class="field">
+      <label>Clé FMP Premium</label>
+      <input type="password" id="kFmp" placeholder="votre clé FMP" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label>Modèle Claude</label>
+      <input type="text" id="kModel" placeholder="claude-sonnet-4-6" />
+      <div class="hint">Défaut : claude-sonnet-4-6. Opus pour plus de finesse, Haiku pour le coût.</div>
+    </div>
+    <div class="field">
+      <label>Base URL FMP (avancé)</label>
+      <input type="text" id="kBase" placeholder="https://financialmodelingprep.com/stable" />
+      <div class="hint">Laissez par défaut. Si un appel est bloqué en CORS depuis le navigateur, pointez vers votre proxy Render.</div>
+    </div>
+    <div class="field">
+      <label>Recherche web (vérif. dates &amp; news)</label>
+      <div class="toggle"><span style="font-size:13px;color:var(--muted)">Active l'outil web_search côté Claude pour dater les catalyseurs</span>
+        <div class="sw" id="swWeb"><i></i></div></div>
+    </div>
+    <button class="save" id="saveSettings">Enregistrer</button>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   APEX ACTIONS — couche déterministe + narration IA
+   ============================================================ */
+const APP_VERSION = '1.0.0';
+const FMP_DEFAULT = 'https://financialmodelingprep.com/stable';
+const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
+const ANTHROPIC_VERSION = '2023-06-01';
+
+/* ---- réglages funnel (ajustables) ---- */
+const DEEP_PER_INDEX = 20;   // candidats descendus en analyse profonde / indice
+const PICKS_PER_INDEX = 10;  // picks finaux affichés / indice
+const QUOTE_CHUNK = 50;      // symboles par appel quote groupé
+const DEEP_CONCURRENCY = 6;  // appels profonds simultanés
+const EARNINGS_SOON_DAYS = 7;
+
+/* ============================================================
+   UNIVERS — CAC 40 (liste maintenue, .PA) + S&P 500 (endpoint)
+   ⚠️ CAC 40 : FMP n'expose pas de constituants propres pour le CAC 40.
+   Liste maintenue manuellement ci-dessous (à vérifier ~1×/trimestre, révision Euronext).
+   Chaque ticker est VALIDÉ au runtime via FMP : un symbole non résolu est
+   simplement écarté (avec note), donc une entrée périmée ne casse jamais l'app.
+   ============================================================ */
+const CAC40 = [
+  ['AC.PA','Accor','Conso. discr.'],['AI.PA','Air Liquide','Matériaux'],['AIR.PA','Airbus','Industrie'],
+  ['MT.AS','ArcelorMittal','Matériaux'],['CS.PA','AXA','Finance'],['BNP.PA','BNP Paribas','Finance'],
+  ['EN.PA','Bouygues','Industrie'],['CAP.PA','Capgemini','Tech.'],['CA.PA','Carrefour','Conso. base'],
+  ['ACA.PA','Crédit Agricole','Finance'],['BN.PA','Danone','Conso. base'],['DSY.PA','Dassault Systèmes','Tech.'],
+  ['EDEN.PA','Edenred','Industrie'],['ENGI.PA','Engie','Énergie'],['EL.PA','EssilorLuxottica','Santé'],
+  ['ERF.PA','Eurofins Scientific','Santé'],['RMS.PA','Hermès','Conso. discr.'],['KER.PA','Kering','Conso. discr.'],
+  ['LR.PA','Legrand','Industrie'],['OR.PA',"L'Oréal",'Conso. base'],['MC.PA','LVMH','Conso. discr.'],
+  ['ML.PA','Michelin','Conso. discr.'],['ORA.PA','Orange','Télécom'],['RI.PA','Pernod Ricard','Conso. base'],
+  ['PUB.PA','Publicis','Communication'],['RNO.PA','Renault','Conso. discr.'],['SAF.PA','Safran','Industrie'],
+  ['SGO.PA','Saint-Gobain','Industrie'],['SAN.PA','Sanofi','Santé'],['SU.PA','Schneider Electric','Industrie'],
+  ['GLE.PA','Société Générale','Finance'],['STLAP.PA','Stellantis','Conso. discr.'],['STMPA.PA','STMicroelectronics','Tech.'],
+  ['TEP.PA','Teleperformance','Industrie'],['HO.PA','Thales','Industrie'],['TTE.PA','TotalEnergies','Énergie'],
+  ['URW.PA','Unibail-Rodamco-W.','Immobilier'],['VIE.PA','Veolia','Util.'],['DG.PA','Vinci','Industrie'],
+  ['BVI.PA','Bureau Veritas','Industrie']
+];
+
+/* ============================================================
+   PROFILS DE PONDÉRATION — poids par famille de facteurs
+   familles : momentum, value, quality, growth, technical, consensus
+   ============================================================ */
+const PROFILES = {
+  balanced: {momentum:.20, value:.20, quality:.20, growth:.15, technical:.10, consensus:.15},
+  momentum: {momentum:.35, value:.05, quality:.10, growth:.15, technical:.20, consensus:.15},
+  value:    {momentum:.10, value:.35, quality:.30, growth:.10, technical:.05, consensus:.10},
+  growth:   {momentum:.20, value:.05, quality:.15, growth:.40, technical:.05, consensus:.15}
+};
+
+/* ---- config ---- */
+const cfg = {
+  get k(){return localStorage.getItem('apex_anthropic')||localStorage.getItem('apexidx_k_anthropic')||''},
+  get f(){return localStorage.getItem('apex_fmp')||''},
+  get model(){return localStorage.getItem('apex_model')||'claude-sonnet-4-6'},
+  get base(){const b=localStorage.getItem('apex_base'); if(b)return b.replace(/\/$/,''); const px=(localStorage.getItem('apexidx_proxy')||'').replace(/\/$/,''); return px?px+'/api/fmp':FMP_DEFAULT;},
+  get web(){return localStorage.getItem('apex_web')!=='0'},
+  get profile(){return localStorage.getItem('apex_profile')||'balanced'}
+};
+
+/* ---- helpers ---- */
+const $=s=>document.querySelector(s);
+const num=v=>{const n=parseFloat(v);return Number.isFinite(n)?n:null};
+const pick=(o,keys)=>{for(const k of keys){if(o&&o[k]!=null&&o[k]!==''){const n=num(o[k]);if(n!=null)return n}}return null};
+const fmt=(v,d=2)=>v==null?'—':(Math.abs(v)>=1000?v.toLocaleString('fr-FR',{maximumFractionDigits:0}):v.toFixed(d));
+const pct=v=>v==null?'—':(v>0?'+':'')+v.toFixed(1)+'%';
+const todayISO=()=>new Date().toISOString().slice(0,10);
+const daysBetween=(a,b)=>Math.round((new Date(a)-new Date(b))/864e5);
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+
+async function fmp(path, params={}){
+  const u=new URL(cfg.base+path);
+  Object.entries(params).forEach(([k,v])=>u.searchParams.set(k,v));
+  u.searchParams.set('apikey',cfg.f);
+  const r=await fetch(u);
+  if(!r.ok) throw new Error('FMP '+r.status+' '+path);
+  return r.json();
+}
+
+/* concurrency pool */
+async function pool(items, n, fn){
+  const out=new Array(items.length); let i=0;
+  await Promise.all(Array.from({length:Math.min(n,items.length)},async()=>{
+    while(i<items.length){const idx=i++;try{out[idx]=await fn(items[idx],idx)}catch(e){out[idx]=null}}
+  }));
+  return out;
+}
+
+/* ---- indicateurs JS depuis bougies daily ---- */
+function rsi(closes,p=14){
+  if(!closes||closes.length<p+1)return null;
+  let g=0,l=0;
+  for(let i=1;i<=p;i++){const d=closes[i-1]-closes[i];d>=0?g+=d:l-=d}
+  g/=p;l/=p;
+  for(let i=p+1;i<closes.length;i++){const d=closes[i-1]-closes[i];
+    g=(g*(p-1)+(d>0?d:0))/p; l=(l*(p-1)+(d<0?-d:0))/p}
+  if(l===0)return 100; const rs=g/l; return 100-100/(1+rs);
+}
+function atr(bars,p=14){ // bars: [{high,low,close}] récent->ancien
+  if(!bars||bars.length<p+1)return null;
+  let s=0;
+  for(let i=0;i<p;i++){const h=bars[i].high,l=bars[i].low,pc=bars[i+1].close;
+    s+=Math.max(h-l,Math.abs(h-pc),Math.abs(l-pc))}
+  return s/p;
+}
+function perf(closes,n){ // closes récent->ancien
+  if(!closes||closes.length<=n||closes[n]==null||closes[n]===0)return null;
+  return (closes[0]/closes[n]-1)*100;
+}
+
+/* percentile rank 0..100 (plus haut = mieux) ; inv=true => plus bas = mieux */
+function pctRank(vals, v, inv=false){
+  const arr=vals.filter(x=>x!=null);
+  if(v==null||arr.length<2)return 50;
+  let below=arr.filter(x=>x<v).length, eq=arr.filter(x=>x===v).length;
+  let r=(below+eq/2)/arr.length*100;
+  return inv?100-r:r;
+}
+
+/* ============================================================
+   PIPELINE
+   ============================================================ */
+const STEPS=['Univers','Scan','Score','Shortlist','IA','Rendu'];
+let running=false;
+
+function setSteps(active){
+  $('#steps').innerHTML=STEPS.map((s,i)=>{
+    const c=i<active?'done':i===active?'run':''; return `<span class="step ${c}">${i+1}·${s}</span>`}).join('');
+}
+function bar(p){$('#barFill').style.width=clamp(p,0,100)+'%'}
+function log(t){$('#plog').textContent=t}
+function status(t){$('#status').textContent=t}
+
+async function generate(){
+  if(running)return;
+  if(!localStorage.getItem('apexidx_proxy') && !cfg.f){openSettings();return toast('Configure le proxy dans le terminal (Paramètres), ou ajoute une clé FMP.')}
+  running=true; $('#btnGen').disabled=true; $('#btnGen').textContent='…';
+  $('#progress').style.display='block'; $('#output').innerHTML=''; setSteps(0); bar(2); status('Génération');
+  const warnings=[];
+  try{
+    /* 1 — UNIVERS */
+    log('Récupération des composants…');
+    let sp=[];
+    try{
+      const raw=await fmp('/sp500-constituent');
+      sp=(raw||[]).map(x=>[x.symbol, x.name||x.symbol, x.sector||'—']).filter(x=>x[0]);
+    }catch(e){warnings.push('S&P 500 : endpoint constituants indisponible ('+e.message+').')}
+    const universe={
+      cac40: CAC40.map(([s,n,se])=>({symbol:s,name:n,sector:se,index:'cac40'})),
+      sp500: sp.map(([s,n,se])=>({symbol:s,name:n,sector:se,index:'sp500'}))
+    };
+    setSteps(1); bar(12);
+
+    /* 2 — SCAN BON MARCHÉ (quotes groupées sur tout l'univers) */
+    log('Scan des cotations (passe légère)…');
+    for(const idx of ['cac40','sp500']){
+      const list=universe[idx]; if(!list.length)continue;
+      const syms=list.map(x=>x.symbol);
+      const quotes={};
+      for(let i=0;i<syms.length;i+=QUOTE_CHUNK){
+        const chunk=syms.slice(i,i+QUOTE_CHUNK);
+        let data=[];
+        try{ data=await fmp('/quote',{symbol:chunk.join(',')}); }
+        catch(e){ /* fallback unitaire si le groupé échoue */
+          data=(await pool(chunk,DEEP_CONCURRENCY,async s=>{try{const q=await fmp('/quote',{symbol:s});return q&&q[0]}catch(_){return null}})).filter(Boolean);
+        }
+        (Array.isArray(data)?data:[]).forEach(q=>{if(q&&q.symbol)quotes[q.symbol]=q});
+        bar(12+ (idx==='cac40'?8:20)*(i/syms.length));
+        log(`Scan ${idx.toUpperCase()} ${Math.min(i+QUOTE_CHUNK,syms.length)}/${syms.length}`);
+      }
+      // attache + écarte les non résolus
+      const resolved=[];
+      for(const it of list){
+        const q=quotes[it.symbol];
+        if(!q){if(idx==='cac40')warnings.push('CAC 40 : '+it.symbol+' non résolu chez FMP (écarté).');continue}
+        it.price=pick(q,['price']); it.chg=pick(q,['changesPercentage','changePercentage']);
+        it.mcap=pick(q,['marketCap']); it.pe=pick(q,['pe','priceEarningsRatio']);
+        it.yHigh=pick(q,['yearHigh']); it.yLow=pick(q,['yearLow']);
+        it.ma50=pick(q,['priceAvg50']); it.ma200=pick(q,['priceAvg200']);
+        it.vol=pick(q,['volume']); if(q.name)it.name=q.name;
+        if(it.price!=null)resolved.push(it);
+      }
+      universe[idx]=resolved;
+    }
+    setSteps(2); bar(40);
+
+    /* 3 — SCORE LÉGER + sélection candidats profonds */
+    log('Pré-classement multi-facteurs…');
+    const deep={};
+    for(const idx of ['cac40','sp500']){
+      const list=universe[idx]; if(!list.length){deep[idx]=[];continue}
+      const peArr=list.map(x=>x.pe);
+      list.forEach(it=>{
+        const toHigh = (it.price&&it.yHigh)? it.price/it.yHigh*100 : null;     // proximité 52s
+        const aboveMa50 = (it.price&&it.ma50)? (it.price/it.ma50-1)*100 : null;
+        const trend = (it.ma50&&it.ma200)? (it.ma50/it.ma200-1)*100 : null;
+        it._mom = avg([
+          pctRank(list.map(x=>x.price&&x.yHigh?x.price/x.yHigh:null), it.price&&it.yHigh?it.price/it.yHigh:null),
+          pctRank(list.map(x=>x.price&&x.ma50?x.price/x.ma50:null), it.price&&it.ma50?it.price/it.ma50:null),
+          pctRank(list.map(x=>x.ma50&&x.ma200?x.ma50/x.ma200:null), it.ma50&&it.ma200?it.ma50/it.ma200:null),
+          pctRank(list.map(x=>x.chg), it.chg)
+        ]);
+        it._valLite = pctRank(peArr.map(p=>p&&p>0?p:null), it.pe&&it.pe>0?it.pe:null, true);
+        it._techLite = trend!=null? clamp(50+trend*2,0,100):50;
+        it._lite = it._mom*0.55 + it._valLite*0.30 + it._techLite*0.15;
+        it.toHigh=toHigh; it.aboveMa50=aboveMa50; it.trend=trend;
+      });
+      list.sort((a,b)=>b._lite-a._lite);
+      deep[idx]=list.slice(0,DEEP_PER_INDEX);
+    }
+    bar(48);
+
+    /* 3b — PASSE PROFONDE (ratios, croissance, analystes, earnings, bougies→RSI/ATR) */
+    const allDeep=[...deep.cac40,...deep.sp500];
+    log(`Analyse profonde de ${allDeep.length} candidats…`);
+    let done=0;
+    await pool(allDeep, DEEP_CONCURRENCY, async it=>{
+      const [rat,km,gro,ptc,grc,earn,hist]=await Promise.all([
+        fmp('/ratios-ttm',{symbol:it.symbol}).catch(()=>null),
+        fmp('/key-metrics-ttm',{symbol:it.symbol}).catch(()=>null),
+        fmp('/financial-growth',{symbol:it.symbol,period:'annual',limit:1}).catch(()=>null),
+        fmp('/price-target-consensus',{symbol:it.symbol}).catch(()=>null),
+        fmp('/grades-consensus',{symbol:it.symbol}).catch(()=>null),
+        fmp('/earnings-calendar',{symbol:it.symbol,from:todayISO(),to:dateOffset(120)}).catch(()=>null),
+        fmp('/historical-price-eod/light',{symbol:it.symbol}).catch(()=>
+             fmp('/historical-price-eod/full',{symbol:it.symbol}).catch(()=>null))
+      ]);
+      const R=Array.isArray(rat)?rat[0]:rat, K=Array.isArray(km)?km[0]:km, G=Array.isArray(gro)?gro[0]:gro;
+      it.pb=pick(R||{},['priceToBookRatioTTM','pbRatioTTM','priceToBookRatio']);
+      it.roe=pick(R||{},['returnOnEquityTTM','returnOnEquity']); if(it.roe!=null&&Math.abs(it.roe)<=3)it.roe*=100;
+      it.margin=pick(R||{},['netProfitMarginTTM','netIncomePerEBTTTM','netProfitMargin']); if(it.margin!=null&&Math.abs(it.margin)<=3)it.margin*=100;
+      it.evEbitda=pick(K||{},['evToEBITDATTM','enterpriseValueOverEBITDATTM','evToOperatingCashFlowTTM']);
+      it.debtEbitda=pick(K||{},['netDebtToEBITDATTM','debtToEbitdaTTM']);
+      it.revG=pick(G||{},['revenueGrowth']); if(it.revG!=null&&Math.abs(it.revG)<=5)it.revG*=100;
+      it.epsG=pick(G||{},['epsgrowth','epsGrowth','growthEPS']); if(it.epsG!=null&&Math.abs(it.epsG)<=5)it.epsG*=100;
+      // analystes
+      const P=Array.isArray(ptc)?ptc[0]:ptc;
+      it.target=pick(P||{},['targetConsensus','targetMedian','targetMean']);
+      it.upside = (it.target&&it.price)? (it.target/it.price-1)*100 : null;
+      const C=Array.isArray(grc)?grc[0]:grc;
+      if(C){const sb=num(C.strongBuy)||0,b=num(C.buy)||0,h=num(C.hold)||0,s=num(C.sell)||0,ss=num(C.strongSell)||0;
+        const tot=sb+b+h+s+ss; it.consTot=tot;
+        it.consScore=tot? (sb*100+b*75+h*50+s*25+ss*0)/tot : null;
+        it.consLabel= it.consScore==null?'—': it.consScore>=75?'Achat fort': it.consScore>=60?'Achat': it.consScore>=45?'Conserver':'Vendre';
+      }
+      // earnings à venir
+      if(Array.isArray(earn)){
+        const fut=earn.map(e=>e.date).filter(d=>d&&d>=todayISO()).sort();
+        it.nextEarn=fut[0]||null;
+        it.earnIn= it.nextEarn? daysBetween(it.nextEarn,todayISO()) : null;
+      }
+      // bougies -> RSI / ATR / perfs (hist: récent->ancien attendu)
+      let bars=[];
+      if(hist){ const arr=Array.isArray(hist)?hist:(hist.historical||[]);
+        bars=arr.map(b=>({close:num(b.close ?? b.price),high:num(b.high ?? b.close ?? b.price),low:num(b.low ?? b.close ?? b.price),date:b.date}))
+                .filter(b=>b.close!=null);
+        // garantir ordre récent->ancien
+        if(bars.length>1 && bars[0].date < bars[bars.length-1].date) bars.reverse();
+      }
+      const closes=bars.map(b=>b.close);
+      it.rsi=rsi(closes); it.atr=atr(bars);
+      it.p1m=perf(closes,21); it.p3m=perf(closes,63); it.p6m=perf(closes,126);
+      if(it.ma50==null&&closes.length>=50)it.ma50=avg(closes.slice(0,50));
+      if(it.ma200==null&&closes.length>=200)it.ma200=avg(closes.slice(0,200));
+      // complétude données -> confiance
+      const have=['roe','margin','revG','rsi','target'].filter(k=>it[k]!=null).length;
+      it.dataConf= have>=4?'high':have>=2?'mid':'low';
+      done++; if(done%3===0){log(`Profond ${done}/${allDeep.length}`);bar(48+32*done/allDeep.length)}
+    });
+    setSteps(3); bar(80);
+
+    /* 3c — SCORE COMPLET pondéré (par indice) + shortlist */
+    const W=PROFILES[cfg.profile]||PROFILES.balanced;
+    const shortlist={};
+    for(const idx of ['cac40','sp500']){
+      const g=deep[idx]; if(!g.length){shortlist[idx]=[];continue}
+      const col=k=>g.map(x=>x[k]);
+      g.forEach(it=>{
+        const fMom=avg([pctRank(col('p3m'),it.p3m),pctRank(col('p6m'),it.p6m),pctRank(col('toHigh'),it.toHigh),pctRank(col('aboveMa50'),it.aboveMa50)]);
+        const fVal=avg([pctRank(col('pe'),it.pe&&it.pe>0?it.pe:null,true),pctRank(col('pb'),it.pb&&it.pb>0?it.pb:null,true),pctRank(col('evEbitda'),it.evEbitda&&it.evEbitda>0?it.evEbitda:null,true)]);
+        const fQual=avg([pctRank(col('roe'),it.roe),pctRank(col('margin'),it.margin),pctRank(col('debtEbitda'),it.debtEbitda,true)]);
+        const fGro=avg([pctRank(col('revG'),it.revG),pctRank(col('epsG'),it.epsG)]);
+        const fTech=avg([ it.rsi!=null? rsiScore(it.rsi):50, it.trend!=null?clamp(50+it.trend*2,0,100):50 ]);
+        const fCons=avg([pctRank(col('upside'),it.upside), it.consScore!=null?it.consScore:50]);
+        it.f={momentum:fMom,value:fVal,quality:fQual,growth:fGro,technical:fTech,consensus:fCons};
+        it.score = Math.round(
+          fMom*W.momentum+fVal*W.value+fQual*W.quality+fGro*W.growth+fTech*W.technical+fCons*W.consensus
+        );
+        levels(it); // entrées/SL/TP déterministes
+      });
+      g.sort((a,b)=>b.score-a.score);
+      shortlist[idx]=g.slice(0,PICKS_PER_INDEX);
+    }
+
+    /* 4 — CASCADE IA (par indice, JSON strict) */
+    setSteps(4); bar(85); log('Narration IA (cascade 8 points)…');
+    const ai={cac40:{},sp500:{}};
+    if(cfg.k){
+      for(const idx of ['cac40','sp500']){
+        if(!shortlist[idx].length)continue;
+        try{
+          const res=await aiCascade(idx,shortlist[idx]);
+          (res||[]).forEach(o=>{if(o&&o.symbol)ai[idx][o.symbol.toUpperCase()]=o});
+        }catch(e){warnings.push('IA '+idx.toUpperCase()+' : '+e.message+' (classement déterministe conservé).')}
+      }
+    }else{
+      warnings.push('Clé Anthropic absente : classement déterministe affiché sans narration IA.');
+    }
+
+    /* 5 — RENDU */
+    setSteps(5); bar(98);
+    render(shortlist, ai, warnings);
+    bar(100); status('Terminé'); log('');
+    const now=new Date(); localStorage.setItem('apex_last',now.toISOString());
+    setUpdated();
+    setTimeout(()=>{$('#progress').style.display='none'},700);
+  }catch(e){
+    $('#output').innerHTML=`<div class="note err"><b>Erreur.</b> ${e.message}</div>`;
+    status('Erreur');
+  }finally{
+    running=false; $('#btnGen').disabled=false; $('#btnGen').textContent='Générer';
+  }
+}
+
+function rsiScore(r){ // favorise 45-65, pénalise sur-achat/sur-vente
+  if(r==null)return 50;
+  if(r>=45&&r<=65)return 100;
+  if(r>65)return clamp(100-(r-65)*2.5,0,100);
+  return clamp(40+r,0,100);
+}
+function avg(a){const v=a.filter(x=>x!=null);return v.length?v.reduce((s,x)=>s+x,0)/v.length:50}
+function dateOffset(d){const x=new Date();x.setDate(x.getDate()+d);return x.toISOString().slice(0,10)}
+
+/* ---- niveaux déterministes (entrées doubles / SL / TP) ---- */
+function levels(it){
+  const p=it.price, a=it.atr||(p?p*0.02:null), ma50=it.ma50, ma200=it.ma200, yH=it.yHigh;
+  if(!p||!a){it.lv=null;return}
+  const support = (ma50&&ma50<p)?ma50 : (ma200&&ma200<p)?ma200 : p-1.5*a;
+  const resist = (yH&&yH>p)? yH : p+1.5*a;
+  const entryAgg = +(Math.max(resist, p)*1.001).toFixed(2);      // cassure
+  const entryLim = +(support).toFixed(2);                         // repli sur support/MM
+  const sl = +((support - 1.0*a)).toFixed(2);                     // sous invalidation
+  const tp1 = +((yH&&yH>p)? yH : p+1.5*a).toFixed(2);             // résistance / 52s
+  const tp2 = +((Math.min((yH?yH*1.05:p+3*a), entryAgg+3*a))).toFixed(2); // extension plafonnée ATR
+  const risk = entryLim - sl;
+  const rr = risk>0? ((tp1-entryLim)/risk):null;
+  it.lv={entryAgg,entryLim,sl,tp1,tp2,rr:rr?+rr.toFixed(2):null,support:+support.toFixed(2),resist:+resist.toFixed(2)};
+}
+
+/* ============================================================
+   IA — cascade actions 8 points, JSON STRICT
+   ============================================================ */
+async function aiCascade(idx, picks){
+  const indexName = idx==='cac40'?'CAC 40':'S&P 500';
+  // payload chiffré : l'IA ne reçoit QUE des faits déjà calculés
+  const data=picks.map(it=>({
+    symbol:it.symbol, name:it.name, sector:it.sector, score:it.score, conviction_hint:Math.max(1,Math.min(5,Math.round(it.score/20))),
+    price:it.price, chg_pct:r1(it.chg), perf_3m:r1(it.p3m), perf_6m:r1(it.p6m), dist_to_52w_high_pct:r1(it.toHigh!=null?it.toHigh-100:null),
+    pe:r1(it.pe), pb:r1(it.pb), ev_ebitda:r1(it.evEbitda), roe_pct:r1(it.roe), net_margin_pct:r1(it.margin),
+    debt_ebitda:r1(it.debtEbitda), rev_growth_pct:r1(it.revG), eps_growth_pct:r1(it.epsG),
+    rsi:r1(it.rsi), ma50:r1(it.ma50), ma200:r1(it.ma200), atr:r1(it.atr),
+    analyst_consensus:it.consLabel||null, analyst_count:it.consTot||null, price_target:r1(it.target), target_upside_pct:r1(it.upside),
+    next_earnings_date:it.nextEarn||null, earnings_in_days:it.earnIn,
+    factor_scores:Object.fromEntries(Object.entries(it.f||{}).map(([k,v])=>[k,Math.round(v)])),
+    data_confidence:it.dataConf,
+    levels:it.lv
+  }));
+
+  const sys=`Tu es analyste actions senior pour un terminal pro. On te donne des PICKS DÉJÀ SÉLECTIONNÉS et DÉJÀ CHIFFRÉS par un moteur déterministe (indice ${indexName}). 
+RÈGLES ABSOLUES (anti-hallucination) :
+- N'invente AUCUN chiffre. Utilise UNIQUEMENT les valeurs fournies. Si un champ est null, dis "n/d", n'estime pas.
+- Ne modifie pas les niveaux (entrées/SL/TP) : ils sont déterministes.
+- Pour une date d'earnings : ne la présente comme "à venir" que si earnings_in_days >= 0. Si null, dis "non datée".
+- Si data_confidence = "low", conviction ≤ 2.
+- Tu CLASSES et JUSTIFIES, tu ne décides pas seul des chiffres.
+${cfg.web?'- Tu peux utiliser la recherche web pour DATER et contextualiser un catalyseur récent (contrat, résultat, news). Toute affirmation web doit être datée. Ne contredis jamais un chiffre fourni.':''}
+SORTIE : un objet JSON STRICT, commence par { finit par }. Schéma :
+{"picks":[{"symbol":"...","conviction":1-5,"thesis":"1-2 phrases, *terme clé* entre astérisques","p1_secteur":"...","p2_fondamentaux":"...","p3_momentum":"...","p4_catalyseurs":"... (daté)","p5_consensus":"...","p6_flux":"...","p7_risque":"...","p8_repricing":"ce que le marché price mal","catalyst_watch":"court","risk_flag":"none|earnings|valuation|volatility|other"}]}
+Aucun texte hors du JSON.`;
+
+  const body={
+    model:cfg.model, max_tokens:8192, temperature:0.3, system:sys,
+    messages:[{role:'user',content:'Données (NE PAS recalculer) :\n'+JSON.stringify(data)}]
+  };
+  if(cfg.web) body.tools=[{type:'web_search_20250305',name:'web_search',max_uses:5}];
+
+  const r=await fetch(ANTHROPIC_URL,{method:'POST',headers:{
+    'content-type':'application/json','x-api-key':cfg.k,
+    'anthropic-version':ANTHROPIC_VERSION,'anthropic-dangerous-direct-browser-access':'true'
+  },body:JSON.stringify(body)});
+  if(!r.ok){const t=await r.text();throw new Error('Anthropic '+r.status+' '+t.slice(0,120))}
+  const j=await r.json();
+  const text=(j.content||[]).filter(c=>c.type==='text').map(c=>c.text).join('\n');
+  const parsed=parseJSON(text);
+  return parsed&&parsed.picks?parsed.picks:[];
+}
+function r1(v){return v==null?null:+(+v).toFixed(2)}
+function parseJSON(t){
+  if(!t)return null;
+  let s=t.replace(/```json/gi,'').replace(/```/g,'').trim();
+  const a=s.indexOf('{'), b=s.lastIndexOf('}');
+  if(a<0||b<0)return null;
+  try{return JSON.parse(s.slice(a,b+1))}catch(e){return null}
+}
+
+/* ============================================================
+   RENDU
+   ============================================================ */
+let currentTab='all';
+let lastData=null;
+
+function render(shortlist, ai, warnings){
+  lastData={shortlist,ai,warnings};
+  let html='';
+  if(warnings&&warnings.length){
+    html+=`<div class="note" style="margin-bottom:14px"><b>Notes du moteur :</b><br>${warnings.map(w=>'· '+w).join('<br>')}</div>`;
+  }
+  const order = currentTab==='all'?['cac40','sp500']:[currentTab];
+  for(const idx of order){
+    const picks=shortlist[idx]||[];
+    html+=`<div class="sec-title"><h2>${idx==='cac40'?'CAC 40':'S&P 500'}</h2><span class="c">top ${picks.length}</span><div class="ln"></div></div>`;
+    if(!picks.length){html+=`<div class="note">Aucun pick (univers vide ou clé FMP).</div>`;continue}
+    picks.forEach((it,i)=>{html+=cardHTML(it,i,ai[idx]&&ai[idx][it.symbol.toUpperCase()])});
+  }
+  $('#output').innerHTML=html||'<div class="note">Rien à afficher.</div>';
+  // accordions
+  document.querySelectorAll('.acc').forEach(b=>b.onclick=()=>b.nextElementSibling.classList.toggle('open'));
+}
+
+function cardHTML(it,i,a){
+  const conv = a&&a.conviction? clamp(a.conviction,1,5) : Math.max(1,Math.min(5,Math.round(it.score/20)));
+  const lv=it.lv||{};
+  const sectorClass = ['','c1','c2','c3','c4','c5'][conv];
+  const thesis = a&&a.thesis? a.thesis.replace(/\*(.+?)\*/g,'<em>$1</em>') : '<span style="color:var(--faint)">Narration IA indisponible — classement déterministe.</span>';
+  const fac=(label,key)=>{const v=Math.round((it.f&&it.f[key])||0);
+    return `<div class="fac"><div class="fl">${label}</div><div class="fb"><i style="width:${v}%"></i></div><div class="fv">${v}</div></div>`};
+  const earnChip = it.nextEarn? (it.earnIn>=0
+      ? `<span class="chip cat">⚑ Résultats ${it.nextEarn} · J-${it.earnIn}</span>`
+      : `<span class="chip">Derniers résultats ${it.nextEarn}</span>`) : '';
+  const upChip = it.upside!=null? `<span class="chip">cible <b>${fmt(it.target)}</b> · ${it.upside>=0?'<span style="color:var(--green)">':'<span style="color:var(--red)">'}${pct(it.upside)}</span></span>`:'';
+  const consChip = it.consLabel? `<span class="chip">consensus <b>${it.consLabel}</b>${it.consTot?` (${it.consTot})`:''}</span>`:'';
+  const conf = it.dataConf==='low'? `<span class="lowconf">données partielles</span>`:'';
+  const rf = a&&a.risk_flag&&a.risk_flag!=='none'? `<span class="chip warn">risque: ${a.risk_flag}</span>`:'';
+  const invURL='https://www.investing.com/search/?q='+encodeURIComponent(it.symbol.replace('.PA','').replace('.AS',''))+' '+encodeURIComponent(it.name||'');
+
+  const cascade = a? `
+    <div class="cascade">
+      ${c8('1 · Secteur & indice',a.p1_secteur)}
+      ${c8('2 · Fondamentaux',a.p2_fondamentaux)}
+      ${c8('3 · Momentum & technique',a.p3_momentum)}
+      ${c8('4 · Catalyseurs',a.p4_catalyseurs)}
+      ${c8('5 · Consensus & révisions',a.p5_consensus)}
+      ${c8('6 · Flux & positionnement',a.p6_flux)}
+      ${c8('7 · Risque',a.p7_risque)}
+      ${c8('8 · Thèse de repricing',a.p8_repricing)}
+    </div>`:'<div class="cascade"><div class="c8" style="color:var(--faint)">Cascade IA non disponible.</div></div>';
+
+  return `
+  <div class="card ${sectorClass}" style="animation-delay:${i*40}ms">
+    <div class="chead">
+      <div class="rank">${i+1}</div>
+      <div class="who">
+        <div class="tk">${it.symbol}${conf}</div>
+        <div class="nm">${it.name||''}</div>
+        <span class="pill">${it.sector||'—'}</span>
+      </div>
+      <div class="scorebox">
+        <div class="s disp">${it.score}</div>
+        <div class="l">score</div>
+        <div class="conv k${conv}">${[1,2,3,4,5].map(n=>`<i class="${n<=conv?'on':''}"></i>`).join('')}</div>
+      </div>
+    </div>
+    <p class="thesis">${thesis}</p>
+    <div class="facs">
+      ${fac('Momentum','momentum')}${fac('Value','value')}${fac('Qualité','quality')}${fac('Crois.','growth')}
+    </div>
+    <div class="metrics">
+      <span class="m">P/E <b>${fmt(it.pe,1)}</b></span>
+      <span class="m">ROE <b>${it.roe!=null?it.roe.toFixed(0)+'%':'—'}</b></span>
+      <span class="m">Marge <b>${it.margin!=null?it.margin.toFixed(0)+'%':'—'}</b></span>
+      <span class="m">Crois. CA <b class="${it.revG>0?'up':'dn'}">${pct(it.revG)}</b></span>
+      <span class="m">RSI <b>${it.rsi!=null?it.rsi.toFixed(0):'—'}</b></span>
+      <span class="m">6 mois <b class="${it.p6m>0?'up':'dn'}">${pct(it.p6m)}</b></span>
+    </div>
+    <div class="levels">
+      <div class="lgrid">
+        <div class="lv agg"><div class="t">Entrée agressive · cassure</div><div class="v">${fmt(lv.entryAgg)}</div></div>
+        <div class="lv lim"><div class="t">Entrée limite · repli MM</div><div class="v">${fmt(lv.entryLim)}</div></div>
+        <div class="lv sl"><div class="t">Stop · invalidation</div><div class="v">${fmt(lv.sl)}</div></div>
+        <div class="lv tp"><div class="t">TP1 · résistance/52s</div><div class="v">${fmt(lv.tp1)}</div></div>
+      </div>
+      <div class="rr">
+        <span class="chip">TP2 <b>${fmt(lv.tp2)}</b></span>
+        <span class="chip">R:R <b>${lv.rr!=null?lv.rr.toFixed(2):'—'}</b></span>
+        ${earnChip}${consChip}${upChip}${rf}
+      </div>
+    </div>
+    <div class="foot">
+      <a class="lk" href="${invURL}" target="_blank" rel="noopener">📈 Graphique Investing</a>
+      <button class="acc">Cascade 8 pts</button>
+    </div>
+    ${cascade}
+  </div>`;
+}
+function c8(label,txt){return `<div class="c8"><b>${label}</b>${txt?txt:'<span style="color:var(--faint)">n/d</span>'}</div>`}
+
+/* ============================================================
+   UI plumbing
+   ============================================================ */
+function setUpdated(){const t=localStorage.getItem('apex_last');
+  $('#updated').textContent= t? 'maj '+new Date(t).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';}
+function toast(m){status(m)}
+
+$('#tabs').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+  document.querySelectorAll('#tabs button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+  currentTab=b.dataset.idx; if(lastData)render(lastData.shortlist,lastData.ai,lastData.warnings);});
+$('#profile').addEventListener('change',e=>localStorage.setItem('apex_profile',e.target.value));
+$('#btnGen').addEventListener('click',generate);
+
+/* settings */
+function openSettings(){
+  $('#kAnthropic').value=cfg.k; $('#kFmp').value=cfg.f; $('#kModel').value=cfg.model;
+  $('#kBase').value=localStorage.getItem('apex_base')||FMP_DEFAULT;
+  $('#swWeb').classList.toggle('on',cfg.web);
+  $('#ov').classList.add('open');
+}
+$('#btnSettings').onclick=openSettings;
+$('#closeSettings').onclick=()=>$('#ov').classList.remove('open');
+$('#ov').onclick=e=>{if(e.target.id==='ov')$('#ov').classList.remove('open')};
+$('#swWeb').onclick=()=>$('#swWeb').classList.toggle('on');
+$('#saveSettings').onclick=()=>{
+  localStorage.setItem('apex_anthropic',$('#kAnthropic').value.trim());
+  localStorage.setItem('apex_fmp',$('#kFmp').value.trim());
+  localStorage.setItem('apex_model',($('#kModel').value.trim()||'claude-sonnet-4-6'));
+  localStorage.setItem('apex_base',($('#kBase').value.trim()||FMP_DEFAULT));
+  localStorage.setItem('apex_web',$('#swWeb').classList.contains('on')?'1':'0');
+  $('#ov').classList.remove('open'); status('Réglages enregistrés');
+};
+
+/* init */
+$('#profile').value=cfg.profile;
+setUpdated();
+$('#cacheTag').textContent='build '+APP_VERSION;
+
+/* ============================================================
+   PWA / service worker + toast de mise à jour
+   ============================================================ */
+/* service worker géré par le terminal Indices (même scope) — pas d'enregistrement ici */
+
+/* scan au lancement si clé FMP présente */
+/* lancement manuel via le bouton Générer (pas de scan auto dans l'onglet) */
+
+/* ============================================================
+   TODO — SCAN PERMANENT "TOUT LE TEMPS" (app fermée + push)
+   ------------------------------------------------------------
+   Une PWA fermée ne peut pas exécuter de scan périodique fiable :
+   iOS ne garantit ni le Background Sync ni la Periodic Sync.
+   Pour un scan réellement permanent + notification push :
+     1. Petit backend serverless planifié (cron) :
+        - Render Cron Job / Cloudflare Worker (Cron Triggers) / Vercel Cron.
+        - Rejoue le pipeline (FMP + Claude) côté serveur toutes les X min.
+        - Stocke le dernier classement (KV / Supabase).
+     2. Web Push (VAPID — déjà maîtrisé sur Objectif'IT) :
+        - abonnement push côté PWA, envoi depuis le cron quand un pick
+          franchit un seuil (cassure, earnings J-1, upgrade).
+     3. La PWA lit le dernier classement au lancement (déjà fait ici).
+   NE PAS coder maintenant — laissé volontairement hors scope.
+   ============================================================ */
+</script>
+</body>
+</html>

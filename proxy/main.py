@@ -172,16 +172,16 @@ async def market_state():
         cal = await fmp_calendar(client)
     def chg(s): return qs[s]["chg"] if qs.get(s) else None
     def px(s):  return qs[s]["price"] if qs.get(s) else None
-    us   = [{"sym":"S&P 500","chg":chg("^GSPC"),"price":px("^GSPC"),"tv":"SPX"},
-            {"sym":"Nasdaq 100","chg":chg("^IXIC"),"price":px("^IXIC"),"tv":"IXIC"},
-            {"sym":"Dow","chg":chg("^DJI"),"price":px("^DJI"),"tv":"DJI"}]
-    asia = [a for a in [{"sym":"Nikkei","chg":chg("^N225"),"price":px("^N225"),"tv":"NI225"},
-                        {"sym":"Hang Seng","chg":chg("^HSI"),"price":px("^HSI"),"tv":"HSI"}] if a["chg"] is not None]
-    fut  = [f for f in [{"sym":"ES (S&P)","chg":chg("ESUSD"),"price":px("ESUSD"),"tv":"ES1!"},
-                        {"sym":"NQ (Nasdaq)","chg":(nqv["chg"] if nqv else None),"price":(nqv["price"] if nqv else None),"tv":"NQ1!"},
-                        {"sym":"YM (Dow)","chg":(ymv["chg"] if ymv else None),"price":(ymv["price"] if ymv else None),"tv":"YM1!"},
-                        {"sym":"DAX (cash)","chg":chg("^GDAXI"),"price":px("^GDAXI"),"tv":"DAX"},
-                        {"sym":"CAC (cash)","chg":chg("^FCHI"),"price":px("^FCHI"),"tv":"CAC40"}] if f["chg"] is not None]
+    us   = [{"sym":"S&P 500","chg":chg("^GSPC"),"price":px("^GSPC"),"inv":"/indices/us-spx-500"},
+            {"sym":"Nasdaq 100","chg":chg("^IXIC"),"price":px("^IXIC"),"inv":"/indices/nq-100"},
+            {"sym":"Dow","chg":chg("^DJI"),"price":px("^DJI"),"inv":"/indices/us-30"}]
+    asia = [a for a in [{"sym":"Nikkei","chg":chg("^N225"),"price":px("^N225"),"inv":"/indices/japan-ni225"},
+                        {"sym":"Hang Seng","chg":chg("^HSI"),"price":px("^HSI"),"inv":"/indices/hang-sen-40"}] if a["chg"] is not None]
+    fut  = [f for f in [{"sym":"ES (S&P)","chg":chg("ESUSD"),"price":px("ESUSD"),"inv":"/indices/us-spx-500-futures"},
+                        {"sym":"NQ (Nasdaq)","chg":(nqv["chg"] if nqv else None),"price":(nqv["price"] if nqv else None),"inv":"/indices/nq-100-futures"},
+                        {"sym":"YM (Dow)","chg":(ymv["chg"] if ymv else None),"price":(ymv["price"] if ymv else None),"inv":"/indices/us-30-futures"},
+                        {"sym":"DAX (cash)","chg":chg("^GDAXI"),"price":px("^GDAXI"),"inv":"/indices/germany-30"},
+                        {"sym":"CAC (cash)","chg":chg("^FCHI"),"price":px("^FCHI"),"inv":"/indices/france-40"}] if f["chg"] is not None]
     fr["indices"]="live" if any(x["chg"] is not None for x in us) else "indisponible"
     fr["futures"]="live" if fut else "indisponible"
     fr["asia"]="live" if asia else "indisponible"

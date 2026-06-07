@@ -163,13 +163,16 @@ async def market_state():
         cal = await fmp_calendar(client)
     def chg(s): return qs[s]["chg"] if qs.get(s) else None
     def px(s):  return qs[s]["price"] if qs.get(s) else None
-    us   = [{"sym":"S&P 500","chg":chg("^GSPC")},{"sym":"Nasdaq 100","chg":chg("^IXIC")},{"sym":"Dow","chg":chg("^DJI")}]
-    asia = [a for a in [{"sym":"Nikkei","chg":chg("^N225")},{"sym":"Hang Seng","chg":chg("^HSI")}] if a["chg"] is not None]
-    fut  = [f for f in [{"sym":"ES (S&P)","chg":chg("ESUSD")},
-                        {"sym":"NQ (Nasdaq)","chg":(nqv["chg"] if nqv else None)},
-                        {"sym":"YM (Dow)","chg":(ymv["chg"] if ymv else None)},
-                        {"sym":"DAX (cash)","chg":chg("^GDAXI")},
-                        {"sym":"CAC (cash)","chg":chg("^FCHI")}] if f["chg"] is not None]
+    us   = [{"sym":"S&P 500","chg":chg("^GSPC"),"price":px("^GSPC"),"tv":"SPX"},
+            {"sym":"Nasdaq 100","chg":chg("^IXIC"),"price":px("^IXIC"),"tv":"IXIC"},
+            {"sym":"Dow","chg":chg("^DJI"),"price":px("^DJI"),"tv":"DJI"}]
+    asia = [a for a in [{"sym":"Nikkei","chg":chg("^N225"),"price":px("^N225"),"tv":"NI225"},
+                        {"sym":"Hang Seng","chg":chg("^HSI"),"price":px("^HSI"),"tv":"HSI"}] if a["chg"] is not None]
+    fut  = [f for f in [{"sym":"ES (S&P)","chg":chg("ESUSD"),"price":px("ESUSD"),"tv":"ES1!"},
+                        {"sym":"NQ (Nasdaq)","chg":(nqv["chg"] if nqv else None),"price":(nqv["price"] if nqv else None),"tv":"NQ1!"},
+                        {"sym":"YM (Dow)","chg":(ymv["chg"] if ymv else None),"price":(ymv["price"] if ymv else None),"tv":"YM1!"},
+                        {"sym":"DAX (cash)","chg":chg("^GDAXI"),"price":px("^GDAXI"),"tv":"DAX"},
+                        {"sym":"CAC (cash)","chg":chg("^FCHI"),"price":px("^FCHI"),"tv":"CAC40"}] if f["chg"] is not None]
     fr["indices"]="live" if any(x["chg"] is not None for x in us) else "indisponible"
     fr["futures"]="live" if fut else "indisponible"
     fr["asia"]="live" if asia else "indisponible"

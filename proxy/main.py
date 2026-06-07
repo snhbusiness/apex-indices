@@ -338,28 +338,29 @@ async def fmp_passthrough(fmp_path: str, request: Request):
 
 
 # ---------- Yahoo "actions" : cotation + fondamentaux + bougies (pour le CAC, absent de FMP) ----------
-_YAUTH = {"cookie": "", "crumb": "", "ts": 0.0}
-async def _yahoo_auth(client):
-    """Yahoo exige un cookie + crumb pour quoteSummary. Mis en cache 30 min."""
-    if _YAUTH["crumb"] and (time.time() - _YAUTH["ts"] < 1800):
-        return _YAUTH["cookie"], _YAUTH["crumb"]
-    ck, crumb = "", ""
-    try:
-        r = await client.get("https://fc.yahoo.com/", headers=YH_HEADERS, timeout=12, follow_redirects=True)
-        sc = r.headers.get("set-cookie", "")
-        ck = sc.split(";")[0] if sc else ""
-    except Exception:
-        pass
-    try:
-        h = dict(YH_HEADERS)
-        if ck:
-            h["cookie"] = ck
-        r2 = await client.get("https://query1.finance.yahoo.com/v1/test/getcrumb", headers=h, timeout=12)
-        crumb = (r2.text or "").strip()
-    except Exception:
-        pass
-    _YAUTH.update(cookie=ck, crumb=crumb, ts=time.time())
-    return ck, crumb
+# Client Yahoo partagé : un seul cookie-jar + crumb réutilisés (sinon Yahoo 429 / crumb invalide)
+_YC = {"client": None, "crumb": "", "ts": 0.0}
+async def _yfund_client():
+    if _YC["client"] is None:
+        _YC["client"] = httpx.AsyncClient(headers=YH_HEADERS, timeout=15, follow_redirects=True)
+    cl = _YC["client"]
+    if (not _YC["crumb"]) or (time.time() - _YC["ts"] > 1800):
+        try:
+            await cl.get("https://finance.yahoo.com/")   # pose les cookies (A1/A3) dans le jar
+        except Exception:
+            pass
+        crumb = ""
+        for host in ("query2", "query1"):
+            try:
+                r = await cl.get(f"https://{host}.finance.yahoo.com/v1/test/getcrumb")
+                t = (r.text or "").strip()
+                if t and "<" not in t and len(t) < 40:
+                    crumb = t
+                    break
+            except Exception:
+                pass
+        _YC.update(crumb=crumb, ts=time.time())
+    return cl, _YC["crumb"]
 
 def _yraw(o, k):
     v = o.get(k)
@@ -398,16 +399,19 @@ async def yahoo_stock(sym, client):
             out["changePct"] = round((out["price"]/out["prev"] - 1)*100, 2)
     except Exception as e:
         out["chart_error"] = str(e)[:120]
-    # 2) quoteSummary : fondamentaux (avec crumb)
+    # 2) quoteSummary : fondamentaux (cookie + crumb via client partagé)
     try:
-        ck, crumb = await _yahoo_auth(client)
-        h = dict(YH_HEADERS)
-        if ck:
-            h["cookie"] = ck
-        r = await client.get(f"https://query1.finance.yahoo.com/v10/finance/quoteSummary/{sym}",
-                             params={"modules": "summaryDetail,defaultKeyStatistics,financialData,price", "crumb": crumb},
-                             headers=h, timeout=15)
-        d = r.json()["quoteSummary"]["result"][0]
+        cl, crumb = await _yfund_client()
+        out["crumb_ok"] = bool(crumb)
+        r = await cl.get(f"https://query1.finance.yahoo.com/v10/finance/quoteSummary/{sym}",
+                         params={"modules": "summaryDetail,defaultKeyStatistics,financialData,price", "crumb": crumb})
+        j = r.json()
+        if "quoteSummary" not in j or not j.get("quoteSummary", {}).get("result"):
+            err = (j.get("quoteSummary", {}) or {}).get("error") or j.get("finance", {}).get("error") or f"http {r.status_code}"
+            out["fund_error"] = str(err)[:140]
+            await cset("ys:" + sym, out, TTL_QUOTE)
+            return out
+        d = j["quoteSummary"]["result"][0]
         sd, ks, fd, pr = d.get("summaryDetail", {}), d.get("defaultKeyStatistics", {}), d.get("financialData", {}), d.get("price", {})
         out["marketCap"] = _yraw(pr, "marketCap") or _yraw(sd, "marketCap")
         out["pe"]       = _yraw(sd, "trailingPE")

@@ -71,6 +71,15 @@ async def fmp_first(cands, client):
             return v
     return None
 
+async def fmp_first_valid(cands, client, ok):
+    """Comme fmp_first, mais ne garde que la 1re quote qui passe le test ok(v)
+    (filtre les prix aberrants : mauvais symbole renvoyant 0.001, etc.)."""
+    for sym in cands:
+        v = await fmp_quote_one(sym, client)
+        if v is not None and ok(v):
+            return v
+    return None
+
 async def fmp_get(path, params, client):
     """GET générique sur un endpoint /stable, renvoie une liste ou None."""
     try:
@@ -157,9 +166,9 @@ async def market_state():
         t10, r10, t2, hy = await asyncio.gather(
             fred("DGS10", client), fred("DFII10", client),
             fred("DGS2", client), fred("BAMLH0A0HYM2", client))
-        nqv  = await fmp_first(["NQUSD","NQ","NDXUSD"], client)
-        ymv  = await fmp_first(["YMUSD","YM","DJIUSD"], client)
-        dxyv = await fmp_first(["DXY","^DXY","USDX","DXUSD","DX"], client)
+        nqv  = await fmp_first_valid(["NQUSD","NDXUSD","NQ=F","NQ"], client, lambda v: v.get("price") and v["price"] > 100)
+        ymv  = await fmp_first_valid(["YMUSD","DJIUSD","YM=F","YM"], client, lambda v: v.get("price") and v["price"] > 100)
+        dxyv = await fmp_first_valid(["DX-Y.NYB","USDX","^DXY","DXY","DXUSD","DX=F"], client, lambda v: v.get("price") and 70 < v["price"] < 130)
         cal = await fmp_calendar(client)
     def chg(s): return qs[s]["chg"] if qs.get(s) else None
     def px(s):  return qs[s]["price"] if qs.get(s) else None

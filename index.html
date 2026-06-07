@@ -92,6 +92,11 @@ a{color:var(--gold);text-decoration:none}
 .tile.clk{cursor:pointer;transition:.12s}
 .tile.clk:hover{border-color:var(--gold);transform:translateY(-1px)}
 .tile .go{color:var(--dim);font-size:11px}
+.rng{margin-top:10px}
+.rng-bar{position:relative;height:6px;border-radius:3px;background:var(--line2)}
+.rng-fill{height:6px;border-radius:3px}
+.rng-piv{position:absolute;top:-2px;width:2px;height:10px;background:var(--mut)}
+.rng-lab{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--dim);margin-top:4px}
 .meteo{border-radius:12px;padding:16px 18px;margin-bottom:10px}
 .meteo-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
 .meteo-lab{font-family:var(--mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase}
@@ -205,11 +210,12 @@ a{color:var(--gold);text-decoration:none}
     <button class="nav" data-v="calendar"><i></i>Calendrier</button>
     <button class="nav" data-v="breadth"><i></i>Breadth</button>
     <button class="nav" data-v="sectors"><i></i>Secteurs</button>
+    <button class="nav" data-v="actions"><i></i>Actions <span class="tag">IA</span></button>
     <div class="navgrp">Desk</div>
     <button class="nav" data-v="journal"><i></i>Journal</button>
     <button class="nav" data-v="settings"><i></i>Paramètres</button>
     <div style="margin-top:24px;padding:0 8px;color:var(--dim);font-family:var(--mono);font-size:10px;line-height:1.7">
-      v1.8 · indices build<br>brief 2-couches · catalyseurs IA<br>données locales · navigateur
+      v2.0 · indices + actions<br>brief 2-couches · catalyseurs IA<br>données locales · navigateur
     </div>
   </aside>
   <div class="scrim" id="scrim"></div>
@@ -399,7 +405,15 @@ V.overview=async()=>{
       const lvl=x.price!=null?`<span class="lvl">${fmt(x.price,x.price>=1000?0:2)}</span>`:'';
       const cls=x.chg==null?'':x.chg>=0?'up':'down';
       const val=x.chg==null?'<span style="color:var(--dim)">indispo.</span>':sign(x.chg)+fmt(x.chg)+'%';
-      const inner=`<span class="sym">${x.sym}${url?' <span class="go">↗</span>':''}</span><span class="val ${cls}">${val}</span>${lvl}`;
+      let gauge='';
+      if(x.high!=null&&x.low!=null&&x.high>x.low&&x.price!=null){
+        const span=x.high-x.low, p=v=>Math.max(0,Math.min(100,(v-x.low)/span*100));
+        const pos=p(x.price), gc=(x.chg!=null&&x.chg<0)?'var(--down)':'var(--up)';
+        const piv=(x.prev!=null)?`<div class="rng-piv" style="left:${p(x.prev).toFixed(1)}%"></div>`:'';
+        const d=x.high>=1000?0:2;
+        gauge=`<div class="rng"><div class="rng-bar"><div class="rng-fill" style="width:${pos.toFixed(1)}%;background:${gc}"></div>${piv}</div><div class="rng-lab"><span>bas ${fmt(x.low,d)}</span><span>J-1 ${x.prev!=null?fmt(x.prev,d):'—'}</span><span>haut ${fmt(x.high,d)}</span></div></div>`;
+      }
+      const inner=`<span class="sym">${x.sym}${url?' <span class="go">↗</span>':''}</span><span class="val ${cls}">${val}</span>${lvl}${gauge}`;
       // lien <a> (fiable en PWA iOS) plutôt que window.open (bloqué en plein écran)
       return url
         ? `<a class="card tile clk" href="${url}" target="_blank" rel="noopener" style="animation-delay:${i*.04}s;text-decoration:none;color:inherit">${inner}</a>`
@@ -744,6 +758,12 @@ function mountTicker(){
     colorTheme:'dark',isTransparent:true,displayMode:'compact',locale:'fr'});
   c.appendChild(s);
 }
+
+V.actions=()=>{
+  $('#view').innerHTML=`<div class="h1">sélection<b>Op<em>portunités actions</em></b></div>
+  <div style="color:var(--mut);font-size:12.5px;margin:-6px 0 12px">Scan CAC 40 + S&P 500 · scoring déterministe · synthèse IA. Lance avec <b>Générer</b>.</div>
+  <iframe src="actions.html" title="APEX Actions" style="width:100%;height:calc(100dvh - 170px);min-height:540px;border:1px solid var(--line);border-radius:12px;background:var(--bg)"></iframe>`;
+};
 
 /* ---------- ROUTER + chrome ---------- */
 function go(v){

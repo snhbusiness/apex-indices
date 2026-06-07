@@ -92,6 +92,13 @@ a{color:var(--gold);text-decoration:none}
 .tile.clk{cursor:pointer;transition:.12s}
 .tile.clk:hover{border-color:var(--gold);transform:translateY(-1px)}
 .tile .go{color:var(--dim);font-size:11px}
+.meteo{border-radius:12px;padding:16px 18px;margin-bottom:10px}
+.meteo-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.meteo-lab{font-family:var(--mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase}
+.meteo-word{font-family:var(--mono);font-weight:600;letter-spacing:.08em;font-size:18px;margin-top:3px}
+.meteo-num{font-family:var(--mono);font-weight:600;letter-spacing:-.01em;white-space:nowrap}
+.meteo-track{height:7px;border-radius:4px;margin-top:12px;overflow:hidden}
+.meteo-sub{font-family:var(--mono);font-size:10.5px;margin-top:8px;letter-spacing:.03em}
 .tile .chg{font-family:var(--mono);font-size:13px}
 .section-h{display:flex;align-items:center;gap:10px;margin:26px 0 12px}
 .section-h h3{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);font-weight:600}
@@ -202,7 +209,7 @@ a{color:var(--gold);text-decoration:none}
     <button class="nav" data-v="journal"><i></i>Journal</button>
     <button class="nav" data-v="settings"><i></i>Paramètres</button>
     <div style="margin-top:24px;padding:0 8px;color:var(--dim);font-family:var(--mono);font-size:10px;line-height:1.7">
-      v1.7 · indices build<br>brief 2-couches · catalyseurs IA<br>données locales · navigateur
+      v1.8 · indices build<br>brief 2-couches · catalyseurs IA<br>données locales · navigateur
     </div>
   </aside>
   <div class="scrim" id="scrim"></div>
@@ -399,9 +406,46 @@ V.overview=async()=>{
         : `<div class="card tile" style="animation-delay:${i*.04}s">${inner}</div>`;
     }).join('')
       :'<div class="card" style="color:var(--mut)">indisponible</div>';
-  const m=(l,v)=>`<div class="metric"><span class="v">${v==null?'<span style="color:var(--dim)">—</span>':v}</span><span class="l">${l}</span></div>`;
+  const meteoHero=(fut)=>{
+    const F=(fut||[]).filter(x=>x.chg!=null);
+    if(!F.length) return '';
+    const es=F.find(x=>/^ES/.test(x.sym));
+    const others=F.filter(x=>x!==es);
+    let w;
+    if(es&&others.length) w=0.9*es.chg+0.1*(others.reduce((a,b)=>a+b.chg,0)/others.length);
+    else if(es) w=es.chg;
+    else w=F.reduce((a,b)=>a+b.chg,0)/F.length;
+    const a=Math.abs(w), dir=w>=0?1:-1, col=dir>=0?'var(--up)':'var(--down)';
+    let tier,word;
+    if(a<0.5){tier=0;word='CALME';}
+    else if(a<1.5){tier=1;word='PRUDENCE';}
+    else if(a<3){tier=2;word=dir>=0?'PORTÉ':'TENDU';}
+    else{tier=3;word=dir>=0?'EUPHORIE':'CHOC';}
+    let bg,tc,num,bd,meter,subc,labc;
+    if(tier===0){bg='var(--panel)';tc='var(--mut)';num='var(--mut)';bd='1px solid var(--line)';meter='var(--mut)';subc='var(--dim)';labc='var(--mut)';}
+    else if(tier===1){bg='var(--panel)';tc=col;num=col;bd='1px solid var(--line2)';meter=col;subc='var(--dim)';labc='var(--mut)';}
+    else if(tier===2){bg=dir>=0?'rgba(61,214,140,.10)':'rgba(242,85,90,.10)';tc=col;num=col;bd='1px solid '+(dir>=0?'rgba(61,214,140,.40)':'rgba(242,85,90,.40)');meter=col;subc='var(--dim)';labc='var(--mut)';}
+    else{bg=col;tc='#fff';num='#fff';bd='none';meter='#fff';subc='rgba(255,255,255,.6)';labc='rgba(255,255,255,.7)';}
+    const warn=tier===3?'⚠ ':'';
+    const pct=Math.min(a/5,1)*100;
+    const sz=tier===3?44:tier===2?38:tier===1?32:28;
+    const sg=w>0?'+':(w<0?'−':'');
+    return `<div class="meteo" style="background:${bg};border:${bd}">
+      <div class="meteo-row">
+        <div><div class="meteo-lab" style="color:${labc}">Direction marché · pré-ouverture</div>
+        <div class="meteo-word" style="color:${tc}">${warn}${word}</div></div>
+        <div class="meteo-num" style="color:${num};font-size:${sz}px">${sg}${fmt(a)}%</div>
+      </div>
+      <div class="meteo-track" style="background:${tier===3?'rgba(255,255,255,.25)':'var(--line2)'}">
+        <div style="height:100%;border-radius:inherit;width:${pct}%;background:${meter}"></div>
+      </div>
+      <div class="meteo-sub" style="color:${subc}">Pondéré : S&P 90% + autres indices 10%</div>
+    </div>`;
+  };
+    const m=(l,v)=>`<div class="metric"><span class="v">${v==null?'<span style="color:var(--dim)">—</span>':v}</span><span class="l">${l}</span></div>`;
   const pinPos=(((MS.regime.score||0)+3)/6*100);
   ov.innerHTML=`
+    ${meteoHero(MS.overnight.futures)}
     <div class="section-h"><h3>Clôture US (hier)</h3><span class="ln"></span></div>
     <div class="grid g3">${tiles(MS.overnight.us_close)}</div>
     <div class="section-h"><h3>Asie (nuit)</h3><span class="ln"></span></div>

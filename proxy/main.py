@@ -335,3 +335,100 @@ async def fmp_passthrough(fmp_path: str, request: Request):
                 return JSONResponse(content={"error": "non-json", "status": r.status_code}, status_code=r.status_code)
         except Exception as e:
             return JSONResponse(content={"error": str(e)}, status_code=502)
+
+
+# ---------- Yahoo "actions" : cotation + fondamentaux + bougies (pour le CAC, absent de FMP) ----------
+_YAUTH = {"cookie": "", "crumb": "", "ts": 0.0}
+async def _yahoo_auth(client):
+    """Yahoo exige un cookie + crumb pour quoteSummary. Mis en cache 30 min."""
+    if _YAUTH["crumb"] and (time.time() - _YAUTH["ts"] < 1800):
+        return _YAUTH["cookie"], _YAUTH["crumb"]
+    ck, crumb = "", ""
+    try:
+        r = await client.get("https://fc.yahoo.com/", headers=YH_HEADERS, timeout=12, follow_redirects=True)
+        sc = r.headers.get("set-cookie", "")
+        ck = sc.split(";")[0] if sc else ""
+    except Exception:
+        pass
+    try:
+        h = dict(YH_HEADERS)
+        if ck:
+            h["cookie"] = ck
+        r2 = await client.get("https://query1.finance.yahoo.com/v1/test/getcrumb", headers=h, timeout=12)
+        crumb = (r2.text or "").strip()
+    except Exception:
+        pass
+    _YAUTH.update(cookie=ck, crumb=crumb, ts=time.time())
+    return ck, crumb
+
+def _yraw(o, k):
+    v = o.get(k)
+    if isinstance(v, dict):
+        return v.get("raw")
+    return v
+
+async def yahoo_stock(sym, client):
+    """Renvoie un objet normalisé pour un titre : prix, fondamentaux, bougies (recent->ancien)."""
+    c = await cget("ys:" + sym)
+    if c is not None:
+        return c
+    out = {"symbol": sym}
+    # 1) chart : prix + bougies (sans crumb)
+    try:
+        r = await client.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}",
+                             params={"range": "6mo", "interval": "1d"}, headers=YH_HEADERS, timeout=15)
+        res = r.json()["chart"]["result"][0]
+        meta = res["meta"]
+        out["price"] = meta.get("regularMarketPrice")
+        out["prev"] = meta.get("previousClose") or meta.get("chartPreviousClose")
+        out["high"] = meta.get("regularMarketDayHigh")
+        out["low"]  = meta.get("regularMarketDayLow")
+        out["name"] = meta.get("longName") or meta.get("shortName") or sym
+        q = res["indicators"]["quote"][0]
+        cl, hi, lo = q.get("close", []), q.get("high", []), q.get("low", [])
+        bars = []
+        for i in range(len(cl)):
+            if cl[i] is None:
+                continue
+            bars.append({"close": cl[i],
+                         "high": hi[i] if i < len(hi) and hi[i] is not None else cl[i],
+                         "low":  lo[i] if i < len(lo) and lo[i] is not None else cl[i]})
+        out["candles"] = list(reversed(bars))[:160]   # recent -> ancien
+        if out.get("price") and out.get("prev"):
+            out["changePct"] = round((out["price"]/out["prev"] - 1)*100, 2)
+    except Exception as e:
+        out["chart_error"] = str(e)[:120]
+    # 2) quoteSummary : fondamentaux (avec crumb)
+    try:
+        ck, crumb = await _yahoo_auth(client)
+        h = dict(YH_HEADERS)
+        if ck:
+            h["cookie"] = ck
+        r = await client.get(f"https://query1.finance.yahoo.com/v10/finance/quoteSummary/{sym}",
+                             params={"modules": "summaryDetail,defaultKeyStatistics,financialData,price", "crumb": crumb},
+                             headers=h, timeout=15)
+        d = r.json()["quoteSummary"]["result"][0]
+        sd, ks, fd, pr = d.get("summaryDetail", {}), d.get("defaultKeyStatistics", {}), d.get("financialData", {}), d.get("price", {})
+        out["marketCap"] = _yraw(pr, "marketCap") or _yraw(sd, "marketCap")
+        out["pe"]       = _yraw(sd, "trailingPE")
+        out["pb"]       = _yraw(ks, "priceToBook")
+        out["roe"]      = _yraw(fd, "returnOnEquity")    # décimal -> ×100 côté scorer
+        out["margin"]   = _yraw(fd, "profitMargins")     # décimal -> ×100
+        out["evEbitda"] = _yraw(ks, "enterpriseToEbitda")
+        out["epsG"]     = _yraw(fd, "earningsGrowth")    # décimal -> ×100
+        out["target"]   = _yraw(fd, "targetMeanPrice")
+        out["recoMean"] = _yraw(fd, "recommendationMean")
+        out["recoKey"]  = fd.get("recommendationKey")
+        out["numAnalysts"] = _yraw(fd, "numberOfAnalystOpinions")
+        if out.get("target") and out.get("price"):
+            out["upside"] = round((out["target"]/out["price"] - 1)*100, 2)
+    except Exception as e:
+        out["fund_error"] = str(e)[:120]
+    await cset("ys:" + sym, out, TTL_QUOTE)
+    return out
+
+@app.get("/api/ystock")
+async def ystock_debug(symbol: str = "MC.PA"):
+    """Test : /api/ystock?symbol=MC.PA"""
+    async with httpx.AsyncClient() as client:
+        return await yahoo_stock(symbol, client)

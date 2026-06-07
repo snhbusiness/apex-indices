@@ -88,6 +88,10 @@ a{color:var(--gold);text-decoration:none}
 .tile{display:flex;flex-direction:column;gap:3px}
 .tile .sym{font-family:var(--mono);font-size:12px;color:var(--mut);letter-spacing:.05em}
 .tile .val{font-family:var(--mono);font-size:24px;font-weight:500;letter-spacing:-.01em}
+.tile .lvl{font-family:var(--mono);font-size:13px;color:var(--mut);margin-top:2px}
+.tile.clk{cursor:pointer;transition:.12s}
+.tile.clk:hover{border-color:var(--gold);transform:translateY(-1px)}
+.tile .go{color:var(--dim);font-size:11px}
 .tile .chg{font-family:var(--mono);font-size:13px}
 .section-h{display:flex;align-items:center;gap:10px;margin:26px 0 12px}
 .section-h h3{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);font-weight:600}
@@ -198,7 +202,7 @@ a{color:var(--gold);text-decoration:none}
     <button class="nav" data-v="journal"><i></i>Journal</button>
     <button class="nav" data-v="settings"><i></i>Paramètres</button>
     <div style="margin-top:24px;padding:0 8px;color:var(--dim);font-family:var(--mono);font-size:10px;line-height:1.7">
-      v1.0 · indices build<br>brief 2-couches · catalyseurs IA<br>données locales · navigateur
+      v1.3 · indices build<br>brief 2-couches · catalyseurs IA<br>données locales · navigateur
     </div>
   </aside>
   <div class="scrim" id="scrim"></div>
@@ -381,9 +385,16 @@ V.overview=async()=>{
   MS=await buildMarketState();
   if(MS.error){ ov.innerHTML=proxyError(MS.error); return; }
   paintRegimeBadge(MS);
-  const tiles=arr=>(arr&&arr.length)?arr.map((x,i)=>`<div class="card tile" style="animation-delay:${i*.04}s">
-      <span class="sym">${x.sym}</span>
-      <span class="val ${x.chg==null?'':x.chg>=0?'up':'down'}">${x.chg==null?'<span style="color:var(--dim)">indispo.</span>':sign(x.chg)+fmt(x.chg)+'%'}</span></div>`).join('')
+  const tiles=arr=>(arr&&arr.length)?arr.map((x,i)=>{
+      const url=x.tv?`https://www.tradingview.com/chart/?symbol=${encodeURIComponent(x.tv)}`:'';
+      const lvl=x.price!=null?`<span class="lvl">${fmt(x.price,x.price>=1000?0:2)}</span>`:'';
+      const cls=x.chg==null?'':x.chg>=0?'up':'down';
+      const val=x.chg==null?'<span style="color:var(--dim)">indispo.</span>':sign(x.chg)+fmt(x.chg)+'%';
+      return `<div class="card tile${url?' clk':''}" style="animation-delay:${i*.04}s"${url?` onclick="window.open('${url}','_blank')"`:''}>
+        <span class="sym">${x.sym}${url?' <span class="go">↗</span>':''}</span>
+        <span class="val ${cls}">${val}</span>
+        ${lvl}</div>`;
+    }).join('')
       :'<div class="card" style="color:var(--mut)">indisponible</div>';
   const m=(l,v)=>`<div class="metric"><span class="v">${v==null?'<span style="color:var(--dim)">—</span>':v}</span><span class="l">${l}</span></div>`;
   const pinPos=(((MS.regime.score||0)+3)/6*100);
@@ -491,7 +502,7 @@ function demoBriefHTML(){ // secours rule-based depuis le market_state réel (sa
 
 V.catalysts=async()=>{
   $('#view').innerHTML=`<div class="h1">intelligence<b>Cataly<em>seurs</em></b></div>
-    <p class="sub">Le moteur : news live (via web_search) → chaîne de transmission → enjeux de liquidité → scénarios. Lectures de desk, pas des recommandations.</p>
+    <p class="sub">Le moteur : feed FMP (news, analystes, résultats, M&amp;A) → chaîne de transmission → liquidité → scénarios. Lectures de desk, pas des recommandations.</p>
     <div class="row" style="margin-bottom:18px">
       <button class="btn" id="genCat">⚡ Générer les catalyseurs</button>
     </div>
@@ -708,7 +719,28 @@ function tick(){
 }
 setInterval(tick,1000);tick();
 
-if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').then(reg=>{
+    // si un nouveau SW est trouvé, on l'active dès qu'il est prêt
+    reg.addEventListener('updatefound',()=>{
+      const sw=reg.installing;
+      if(!sw)return;
+      sw.addEventListener('statechange',()=>{
+        if(sw.state==='installed' && navigator.serviceWorker.controller){
+          sw.postMessage('SKIP_WAITING'); // activer la nouvelle version tout de suite
+        }
+      });
+    });
+    // vérifie les mises à jour au lancement et toutes les 30 min
+    reg.update();
+    setInterval(()=>reg.update(),30*60*1000);
+  }).catch(()=>{});
+  // quand le nouveau SW prend la main, on recharge une seule fois automatiquement
+  let _reloaded=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(_reloaded)return; _reloaded=true; location.reload();
+  });
+}
 go((location.hash||'#overview').slice(1));
 </script>
 </body>

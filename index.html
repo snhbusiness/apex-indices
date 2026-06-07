@@ -202,7 +202,7 @@ a{color:var(--gold);text-decoration:none}
     <button class="nav" data-v="journal"><i></i>Journal</button>
     <button class="nav" data-v="settings"><i></i>Paramètres</button>
     <div style="margin-top:24px;padding:0 8px;color:var(--dim);font-family:var(--mono);font-size:10px;line-height:1.7">
-      v1.6 · indices build<br>brief 2-couches · catalyseurs IA<br>données locales · navigateur
+      v1.7 · indices build<br>brief 2-couches · catalyseurs IA<br>données locales · navigateur
     </div>
   </aside>
   <div class="scrim" id="scrim"></div>
@@ -395,7 +395,7 @@ V.overview=async()=>{
       const inner=`<span class="sym">${x.sym}${url?' <span class="go">↗</span>':''}</span><span class="val ${cls}">${val}</span>${lvl}`;
       // lien <a> (fiable en PWA iOS) plutôt que window.open (bloqué en plein écran)
       return url
-        ? `<a class="card tile clk" href="${url}" target="_blank" rel="noopener" style="animation-delay:${i*.04}s;text-decoration:none;color:inherit;display:block">${inner}</a>`
+        ? `<a class="card tile clk" href="${url}" target="_blank" rel="noopener" style="animation-delay:${i*.04}s;text-decoration:none;color:inherit">${inner}</a>`
         : `<div class="card tile" style="animation-delay:${i*.04}s">${inner}</div>`;
     }).join('')
       :'<div class="card" style="color:var(--mut)">indisponible</div>';

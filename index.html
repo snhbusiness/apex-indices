@@ -202,7 +202,7 @@ a{color:var(--gold);text-decoration:none}
     <button class="nav" data-v="journal"><i></i>Journal</button>
     <button class="nav" data-v="settings"><i></i>Paramètres</button>
     <div style="margin-top:24px;padding:0 8px;color:var(--dim);font-family:var(--mono);font-size:10px;line-height:1.7">
-      v1.3 · indices build<br>brief 2-couches · catalyseurs IA<br>données locales · navigateur
+      v1.6 · indices build<br>brief 2-couches · catalyseurs IA<br>données locales · navigateur
     </div>
   </aside>
   <div class="scrim" id="scrim"></div>
@@ -385,15 +385,18 @@ V.overview=async()=>{
   MS=await buildMarketState();
   if(MS.error){ ov.innerHTML=proxyError(MS.error); return; }
   paintRegimeBadge(MS);
+  const INV={SPX:'/indices/us-spx-500',IXIC:'/indices/nasdaq-composite',NDX:'/indices/nq-100',DJI:'/indices/us-30',NI225:'/indices/japan-ni225',HSI:'/indices/hang-sen-40','ES1!':'/indices/us-spx-500-futures','NQ1!':'/indices/nq-100-futures','YM1!':'/indices/us-30-futures',DAX:'/indices/germany-30',CAC40:'/indices/france-40'};
   const tiles=arr=>(arr&&arr.length)?arr.map((x,i)=>{
-      const url=x.tv?`https://www.tradingview.com/chart/?symbol=${encodeURIComponent(x.tv)}`:'';
+      const slug=x.inv||(x.tv?INV[x.tv]:'')||'';
+      const url=slug?`https://www.investing.com${slug}`:'';
       const lvl=x.price!=null?`<span class="lvl">${fmt(x.price,x.price>=1000?0:2)}</span>`:'';
       const cls=x.chg==null?'':x.chg>=0?'up':'down';
       const val=x.chg==null?'<span style="color:var(--dim)">indispo.</span>':sign(x.chg)+fmt(x.chg)+'%';
-      return `<div class="card tile${url?' clk':''}" style="animation-delay:${i*.04}s"${url?` onclick="window.open('${url}','_blank')"`:''}>
-        <span class="sym">${x.sym}${url?' <span class="go">↗</span>':''}</span>
-        <span class="val ${cls}">${val}</span>
-        ${lvl}</div>`;
+      const inner=`<span class="sym">${x.sym}${url?' <span class="go">↗</span>':''}</span><span class="val ${cls}">${val}</span>${lvl}`;
+      // lien <a> (fiable en PWA iOS) plutôt que window.open (bloqué en plein écran)
+      return url
+        ? `<a class="card tile clk" href="${url}" target="_blank" rel="noopener" style="animation-delay:${i*.04}s;text-decoration:none;color:inherit;display:block">${inner}</a>`
+        : `<div class="card tile" style="animation-delay:${i*.04}s">${inner}</div>`;
     }).join('')
       :'<div class="card" style="color:var(--mut)">indisponible</div>';
   const m=(l,v)=>`<div class="metric"><span class="v">${v==null?'<span style="color:var(--dim)">—</span>':v}</span><span class="l">${l}</span></div>`;

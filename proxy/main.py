@@ -6,7 +6,8 @@ Jamais de données factices : un champ indisponible vaut null.
 """
 import os, json, time, asyncio
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 FMP  = os.getenv("FMP_KEY", "")
@@ -49,7 +50,8 @@ async def fmp_quote_one(sym, client):
         if cp is None:
             return None
         val = {"chg": round(float(cp), 2),
-               "price": float(q["price"]) if q.get("price") is not None else None}
+               "price": float(q["price"]) if q.get("price") is not None else None,
+               "high": q.get("dayHigh"), "low": q.get("dayLow"), "prev": q.get("previousClose")}
         await cset("q:" + sym, val, TTL_QUOTE)
         return val
     except Exception:
@@ -95,7 +97,8 @@ async def yahoo_quote(sym, client):
         prev = meta.get("chartPreviousClose") or meta.get("previousClose")
         if price is None or not prev:
             return None
-        val = {"chg": round((price/prev - 1)*100, 2), "price": float(price)}
+        val = {"chg": round((price/prev - 1)*100, 2), "price": float(price),
+               "high": meta.get("regularMarketDayHigh"), "low": meta.get("regularMarketDayLow"), "prev": prev}
         await cset("yq:" + sym, val, TTL_QUOTE)
         return val
     except Exception:
@@ -195,19 +198,22 @@ async def market_state():
         cal = await fmp_calendar(client)
     def chg(s): return qs[s]["chg"] if qs.get(s) else None
     def px(s):  return qs[s]["price"] if qs.get(s) else None
-    us   = [{"sym":"S&P 500","chg":chg("^GSPC"),"price":px("^GSPC"),"inv":"/indices/us-spx-500"},
-            {"sym":"Nasdaq 100","chg":chg("^IXIC"),"price":px("^IXIC"),"inv":"/indices/nq-100"},
-            {"sym":"Dow","chg":chg("^DJI"),"price":px("^DJI"),"inv":"/indices/us-30"}]
-    asia = [a for a in [{"sym":"Nikkei","chg":chg("^N225"),"price":px("^N225"),"inv":"/indices/japan-ni225"},
-                        {"sym":"Hang Seng","chg":chg("^HSI"),"price":px("^HSI"),"inv":"/indices/hang-sen-40"}] if a["chg"] is not None]
-    yf=lambda y:{"chg":(y["chg"] if y else None),"price":(y["price"] if y else None)}
+    def hi(s):  return qs[s].get("high") if qs.get(s) else None
+    def lo(s):  return qs[s].get("low") if qs.get(s) else None
+    def pv(s):  return qs[s].get("prev") if qs.get(s) else None
+    us   = [{"sym":"S&P 500","chg":chg("^GSPC"),"price":px("^GSPC"),"high":hi("^GSPC"),"low":lo("^GSPC"),"prev":pv("^GSPC"),"inv":"/indices/us-spx-500"},
+            {"sym":"Nasdaq 100","chg":chg("^IXIC"),"price":px("^IXIC"),"high":hi("^IXIC"),"low":lo("^IXIC"),"prev":pv("^IXIC"),"inv":"/indices/nq-100"},
+            {"sym":"Dow","chg":chg("^DJI"),"price":px("^DJI"),"high":hi("^DJI"),"low":lo("^DJI"),"prev":pv("^DJI"),"inv":"/indices/us-30"}]
+    asia = [a for a in [{"sym":"Nikkei","chg":chg("^N225"),"price":px("^N225"),"high":hi("^N225"),"low":lo("^N225"),"prev":pv("^N225"),"inv":"/indices/japan-ni225"},
+                        {"sym":"Hang Seng","chg":chg("^HSI"),"price":px("^HSI"),"high":hi("^HSI"),"low":lo("^HSI"),"prev":pv("^HSI"),"inv":"/indices/hang-sen-40"}] if a["chg"] is not None]
+    yf=lambda y:{"chg":(y["chg"] if y else None),"price":(y["price"] if y else None),"high":(y.get("high") if y else None),"low":(y.get("low") if y else None),"prev":(y.get("prev") if y else None)}
     cac_imp=(y_es["chg"] if y_es else None)
     fut  = [f for f in [{"sym":"ES (S&P 500)","inv":"/indices/us-spx-500-futures",**yf(y_es)},
                         {"sym":"NQ (Nasdaq 100)","inv":"/indices/nq-100-futures",**yf(y_nq)},
                         {"sym":"YM (Dow)","inv":"/indices/us-30-futures",**yf(y_ym)},
                         {"sym":"RTY (Russell 2000)","inv":"/indices/smallcap-2000-futures",**yf(y_rty)},
-                        {"sym":"DAX (cash)","chg":chg("^GDAXI"),"price":px("^GDAXI"),"inv":"/indices/germany-30"},
-                        {"sym":"CAC 40 (cash)","chg":chg("^FCHI"),"price":px("^FCHI"),"inv":"/indices/france-40"},
+                        {"sym":"DAX (cash)","chg":chg("^GDAXI"),"price":px("^GDAXI"),"high":hi("^GDAXI"),"low":lo("^GDAXI"),"prev":pv("^GDAXI"),"inv":"/indices/germany-30"},
+                        {"sym":"CAC 40 (cash)","chg":chg("^FCHI"),"price":px("^FCHI"),"high":hi("^FCHI"),"low":lo("^FCHI"),"prev":pv("^FCHI"),"inv":"/indices/france-40"},
                         {"sym":"CAC 40 (ouv. implicite via ES)","chg":cac_imp,"price":None,"inv":"/indices/france-40"}] if f["chg"] is not None]
     fr["indices"]="live" if any(x["chg"] is not None for x in us) else "indisponible"
     fr["futures"]="live" if fut else "indisponible"
@@ -312,3 +318,20 @@ async def yahoo_debug(symbol: str = "ES=F"):
     async with httpx.AsyncClient() as client:
         v = await yahoo_quote(symbol, client)
         return {"symbol": symbol, "quote": v}
+
+
+# ---------- Passe-plat FMP générique (pour l'app Actions) ----------
+# La clé FMP est injectée ici, jamais exposée au navigateur. CORS déjà restreint à l'origine.
+@app.get("/api/fmp/{fmp_path:path}")
+async def fmp_passthrough(fmp_path: str, request: Request):
+    params = {k: v for k, v in request.query_params.items() if k != "apikey"}
+    params["apikey"] = FMP
+    async with httpx.AsyncClient() as client:
+        try:
+            r = await client.get(f"{BASE}/{fmp_path}", params=params, timeout=25)
+            try:
+                return JSONResponse(content=r.json(), status_code=r.status_code)
+            except Exception:
+                return JSONResponse(content={"error": "non-json", "status": r.status_code}, status_code=r.status_code)
+        except Exception as e:
+            return JSONResponse(content={"error": str(e)}, status_code=502)

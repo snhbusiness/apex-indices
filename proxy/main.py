@@ -182,13 +182,15 @@ async def market_state():
     fr = {}
     async with httpx.AsyncClient() as client:
         qs = await fmp_quotes(["^GSPC","^IXIC","^DJI","^N225","^HSI",
-                               "ESUSD","^GDAXI","^FCHI",
-                               "^VIX","RSP","SPY","CLUSD"], client)
+                               "^GDAXI","^FCHI","RSP","SPY","CLUSD"], client)
         t10, r10, t2, hy = await asyncio.gather(
             fred("DGS10", client), fred("DFII10", client),
             fred("DGS2", client), fred("BAMLH0A0HYM2", client))
-        nqv  = await fmp_first_valid(["NQUSD","NDXUSD","NQ=F","NQ"], client, lambda v: v.get("price") and v["price"] > 100)
-        ymv  = await fmp_first_valid(["YMUSD","DJIUSD","YM=F","YM"], client, lambda v: v.get("price") and v["price"] > 100)
+        y_es  = await yahoo_quote("ES=F", client)
+        y_nq  = await yahoo_quote("NQ=F", client)
+        y_ym  = await yahoo_quote("YM=F", client)
+        y_rty = await yahoo_quote("RTY=F", client)
+        y_vix = await yahoo_quote("^VIX", client)
         dxyv = await fmp_first_valid(["DX-Y.NYB","USDX","^DXY","DXY","DXUSD","DX=F"], client, lambda v: v.get("price") and 70 < v["price"] < 130)
         cal = await fmp_calendar(client)
     def chg(s): return qs[s]["chg"] if qs.get(s) else None
@@ -198,11 +200,15 @@ async def market_state():
             {"sym":"Dow","chg":chg("^DJI"),"price":px("^DJI"),"inv":"/indices/us-30"}]
     asia = [a for a in [{"sym":"Nikkei","chg":chg("^N225"),"price":px("^N225"),"inv":"/indices/japan-ni225"},
                         {"sym":"Hang Seng","chg":chg("^HSI"),"price":px("^HSI"),"inv":"/indices/hang-sen-40"}] if a["chg"] is not None]
-    fut  = [f for f in [{"sym":"ES (S&P)","chg":chg("ESUSD"),"price":px("ESUSD"),"inv":"/indices/us-spx-500-futures"},
-                        {"sym":"NQ (Nasdaq)","chg":(nqv["chg"] if nqv else None),"price":(nqv["price"] if nqv else None),"inv":"/indices/nq-100-futures"},
-                        {"sym":"YM (Dow)","chg":(ymv["chg"] if ymv else None),"price":(ymv["price"] if ymv else None),"inv":"/indices/us-30-futures"},
+    yf=lambda y:{"chg":(y["chg"] if y else None),"price":(y["price"] if y else None)}
+    cac_imp=(y_es["chg"] if y_es else None)
+    fut  = [f for f in [{"sym":"ES (S&P 500)","inv":"/indices/us-spx-500-futures",**yf(y_es)},
+                        {"sym":"NQ (Nasdaq 100)","inv":"/indices/nq-100-futures",**yf(y_nq)},
+                        {"sym":"YM (Dow)","inv":"/indices/us-30-futures",**yf(y_ym)},
+                        {"sym":"RTY (Russell 2000)","inv":"/indices/smallcap-2000-futures",**yf(y_rty)},
                         {"sym":"DAX (cash)","chg":chg("^GDAXI"),"price":px("^GDAXI"),"inv":"/indices/germany-30"},
-                        {"sym":"CAC (cash)","chg":chg("^FCHI"),"price":px("^FCHI"),"inv":"/indices/france-40"}] if f["chg"] is not None]
+                        {"sym":"CAC 40 (cash)","chg":chg("^FCHI"),"price":px("^FCHI"),"inv":"/indices/france-40"},
+                        {"sym":"CAC 40 (ouv. implicite via ES)","chg":cac_imp,"price":None,"inv":"/indices/france-40"}] if f["chg"] is not None]
     fr["indices"]="live" if any(x["chg"] is not None for x in us) else "indisponible"
     fr["futures"]="live" if fut else "indisponible"
     fr["asia"]="live" if asia else "indisponible"
@@ -210,7 +216,8 @@ async def market_state():
     rsp, spy = chg("RSP"), chg("SPY")
     rsp_spy = ("divergence négative (étroit)" if (rsp is not None and spy is not None and rsp < spy)
                else "breadth saine" if (rsp is not None and spy is not None) else None)
-    regime = {"vix": round(px("^VIX"),1) if px("^VIX") else None, "vix_term": None,
+    vix_val=(y_vix["price"] if y_vix else None)
+    regime = {"vix": round(vix_val,1) if vix_val else None, "vix_term": None,
               "hy_oas": round(hy,2) if hy else None, "rsp_spy": rsp_spy}
     fa = (sum(f["chg"] for f in fut)/len(fut)) if fut else None
     regime["score"] = score_regime(regime, fa)

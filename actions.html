@@ -653,18 +653,19 @@ function dateOffset(d){const x=new Date();x.setDate(x.getDate()+d);return x.toIS
 
 /* ---- niveaux déterministes (entrées doubles / SL / TP) ---- */
 function levels(it){
-  const p=it.price, a=it.atr||(p?p*0.02:null), ma50=it.ma50, ma200=it.ma200, yH=it.yHigh;
+  const p=it.price, a=it.atr||(p?p*0.02:null), ma50=it.ma50, ma200=it.ma200, yH=it.yHigh, yL=it.yLow;
   if(!p||!a){it.lv=null;return}
-  const support = (ma50&&ma50<p)?ma50 : (ma200&&ma200<p)?ma200 : p-1.5*a;
-  const resist = (yH&&yH>p)? yH : p+1.5*a;
-  const entryAgg = +(Math.max(resist, p)*1.001).toFixed(2);      // cassure
-  const entryLim = +(support).toFixed(2);                         // repli sur support/MM
-  const sl = +((support - 1.0*a)).toFixed(2);                     // sous invalidation
-  const tp1 = +((yH&&yH>p)? yH : p+1.5*a).toFixed(2);             // résistance / 52s
-  const tp2 = +((Math.min((yH?yH*1.05:p+3*a), entryAgg+3*a))).toFixed(2); // extension plafonnée ATR
-  const risk = entryLim - sl;
-  const rr = risk>0? ((tp1-entryLim)/risk):null;
-  it.lv={entryAgg,entryLim,sl,tp1,tp2,rr:rr?+rr.toFixed(2):null,support:+support.toFixed(2),resist:+resist.toFixed(2)};
+  const uptrend = !!(ma50&&ma200&&p>ma50&&ma50>ma200);                 // tendance haussière (pré-requis du setup)
+  const retest = (ma50&&ma50<=p)?ma50 : (ma200&&ma200<=p)?ma200 : p-1.5*a;  // niveau retesté (support dynamique)
+  const resist = (yH&&yH>p)?yH : p+2*a;                                // plus-haut / prochaine résistance (objectif)
+  const entry = +retest.toFixed(2);                                    // zone d'achat sur retest du niveau
+  const sl    = +(retest - 1.2*a).toFixed(2);                          // stop juste sous le niveau retesté
+  const tp1   = +resist.toFixed(2);                                    // objectif = plus-haut au-dessus
+  const tp2   = +(resist + 2*a).toFixed(2);                            // extension
+  const risk  = entry - sl;
+  const rr    = risk>0? +(((tp1-entry)/risk)).toFixed(2):null;
+  const dist  = +(((p-entry)/p)*100).toFixed(1);                       // % du cours AU-DESSUS de la zone (proximité du retest)
+  it.lv={entry,sl,tp1,tp2,rr,uptrend,dist,retest:+retest.toFixed(2),resist:+resist.toFixed(2)};
 }
 
 /* ============================================================
@@ -804,14 +805,16 @@ function cardHTML(it,i,a){
     </div>
     <div class="levels">
       <div class="lgrid">
-        <div class="lv agg"><div class="t">Entrée agressive · cassure</div><div class="v">${fmt(lv.entryAgg)}</div></div>
-        <div class="lv lim"><div class="t">Entrée limite · repli MM</div><div class="v">${fmt(lv.entryLim)}</div></div>
-        <div class="lv sl"><div class="t">Stop · invalidation</div><div class="v">${fmt(lv.sl)}</div></div>
-        <div class="lv tp"><div class="t">TP1 · résistance/52s</div><div class="v">${fmt(lv.tp1)}</div></div>
+        <div class="lv agg"><div class="t">Zone d'achat · retest MM</div><div class="v">${fmt(lv.entry)}</div></div>
+        <div class="lv lim"><div class="t">Résistance · plus-haut</div><div class="v">${fmt(lv.resist)}</div></div>
+        <div class="lv sl"><div class="t">Stop · sous le niveau</div><div class="v">${fmt(lv.sl)}</div></div>
+        <div class="lv tp"><div class="t">TP1 · résistance</div><div class="v">${fmt(lv.tp1)}</div></div>
       </div>
       <div class="rr">
         <span class="chip">TP2 <b>${fmt(lv.tp2)}</b></span>
         <span class="chip">R:R <b>${lv.rr!=null?lv.rr.toFixed(2):'—'}</b></span>
+        <span class="chip">${lv.uptrend?'Tendance ✓':'⚠ Pas en tendance'}</span>
+        <span class="chip">${lv.dist>3?('Repli à attendre · +'+lv.dist+'%'):(lv.dist<-1?('Sous le niveau · '+lv.dist+'%'):'Proche de la zone ✓')}</span>
         ${earnChip}${consChip}${upChip}${rf}
       </div>
     </div>

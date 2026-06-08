@@ -344,7 +344,7 @@ async def _yfund_client():
     if _YC["client"] is None:
         _YC["client"] = httpx.AsyncClient(headers=YH_HEADERS, timeout=15, follow_redirects=True)
     cl = _YC["client"]
-    if (not _YC["crumb"]) or (time.time() - _YC["ts"] > 1800):
+    if (_YC["ts"] == 0.0) or (time.time() - _YC["ts"] > 1800):
         crumb = ""
         try:
             r = await cl.get("https://finance.yahoo.com/")
@@ -388,11 +388,10 @@ async def yahoo_stock(sym, client):
     # 1) chart : prix + bougies (sans crumb)
     try:
         r = await client.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}",
-                             params={"range": "6mo", "interval": "1d"}, headers=YH_HEADERS, timeout=15)
+                             params={"range": "1y", "interval": "1d"}, headers=YH_HEADERS, timeout=15)
         res = r.json()["chart"]["result"][0]
         meta = res["meta"]
         out["price"] = meta.get("regularMarketPrice")
-        out["prev"] = meta.get("previousClose") or meta.get("chartPreviousClose")
         out["high"] = meta.get("regularMarketDayHigh")
         out["low"]  = meta.get("regularMarketDayLow")
         out["name"] = meta.get("longName") or meta.get("shortName") or sym
@@ -405,15 +404,26 @@ async def yahoo_stock(sym, client):
             bars.append({"close": cl[i],
                          "high": hi[i] if i < len(hi) and hi[i] is not None else cl[i],
                          "low":  lo[i] if i < len(lo) and lo[i] is not None else cl[i]})
-        out["candles"] = list(reversed(bars))[:160]   # recent -> ancien
-        if out.get("price") and out.get("prev"):
-            out["changePct"] = round((out["price"]/out["prev"] - 1)*100, 2)
+        cand = list(reversed(bars))[:260]   # recent -> ancien (≈1 an)
+        out["candles"] = cand
+        # variation du JOUR = dernier close vs close précédent (et NON le close d'il y a 1 an)
+        if len(cand) >= 2:
+            p0 = out.get("price") or cand[0]["close"]
+            out["prev"] = cand[1]["close"]
+            out["changePct"] = round((p0 / cand[1]["close"] - 1) * 100, 2)
+        elif out.get("price") and meta.get("previousClose"):
+            out["prev"] = meta.get("previousClose")
+            out["changePct"] = round((out["price"]/out["prev"] - 1) * 100, 2)
     except Exception as e:
         out["chart_error"] = str(e)[:120]
     # 2) quoteSummary : fondamentaux (cookie + crumb via client partagé)
     try:
         cl, crumb = await _yfund_client()
         out["crumb_ok"] = bool(crumb)
+        if not crumb:
+            out["fund_error"] = "no crumb (consentement Yahoo) — fondamentaux délégués à l'IA"
+            await cset("ys:" + sym, out, TTL_QUOTE)
+            return out
         r = await cl.get(f"https://query1.finance.yahoo.com/v10/finance/quoteSummary/{sym}",
                          params={"modules": "summaryDetail,defaultKeyStatistics,financialData,price", "crumb": crumb})
         j = r.json()

@@ -420,6 +420,7 @@ async def yahoo_stock(sym, client):
         out["margin"]   = _yraw(fd, "profitMargins")     # décimal -> ×100
         out["evEbitda"] = _yraw(ks, "enterpriseToEbitda")
         out["epsG"]     = _yraw(fd, "earningsGrowth")    # décimal -> ×100
+        out["revG"]     = _yraw(fd, "revenueGrowth")     # décimal -> ×100
         out["target"]   = _yraw(fd, "targetMeanPrice")
         out["recoMean"] = _yraw(fd, "recommendationMean")
         out["recoKey"]  = fd.get("recommendationKey")

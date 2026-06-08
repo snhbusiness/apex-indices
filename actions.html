@@ -141,6 +141,9 @@
   .chip b{color:var(--txt)}
   .chip.cat{border-color:var(--gold-dim);color:var(--gold)}
   .chip.warn{border-color:var(--red);color:var(--red)}
+  .funda{margin-top:9px;font-size:12px;color:var(--muted);line-height:1.4}
+  .funda b{color:var(--txt)}
+  .funda.good b{color:var(--green)} .funda.bad b{color:var(--red)} .funda.mid b{color:var(--gold)} .funda.faint b{color:var(--faint)}
 
   .foot{display:flex;align-items:center;gap:10px;margin-top:12px}
   .lk{flex:1;text-align:center;font-family:'JetBrains Mono',monospace;font-size:11.5px;letter-spacing:.5px;
@@ -803,6 +806,7 @@ function cardHTML(it,i,a){
       <span class="m">RSI <b>${it.rsi!=null?it.rsi.toFixed(0):'—'}</b></span>
       <span class="m">6 mois <b class="${it.p6m>0?'up':'dn'}">${pct(it.p6m)}</b></span>
     </div>
+    ${fundaNote(it)}
     <div class="levels">
       <div class="lgrid">
         <div class="lv agg"><div class="t">Zone d'achat · retest MM</div><div class="v">${fmt(lv.entry)}</div></div>
@@ -820,12 +824,31 @@ function cardHTML(it,i,a){
     </div>
     <div class="foot">
       <a class="lk" href="${invURL}" target="_blank" rel="noopener">📈 Graphique Investing</a>
+      <a class="lk" href="https://finance.yahoo.com/quote/${encodeURIComponent(it.symbol)}/key-statistics" target="_blank" rel="noopener">📊 Fondamentaux (preuve)</a>
       <button class="acc">Cascade 8 pts</button>
     </div>
     ${cascade}
   </div>`;
 }
 function c8(label,txt){return `<div class="c8"><b>${label}</b>${txt?txt:'<span style="color:var(--faint)">n/d</span>'}</div>`}
+function fundaNote(it){
+  const bits=[];
+  if(it.pe!=null)     bits.push('P/E '+it.pe.toFixed(1));
+  if(it.roe!=null)    bits.push('ROE '+it.roe.toFixed(0)+'%');
+  if(it.margin!=null) bits.push('marge '+it.margin.toFixed(0)+'%');
+  if(it.revG!=null)   bits.push('CA '+pct(it.revG));
+  if(it.epsG!=null)   bits.push('BPA '+pct(it.epsG));
+  if(it.debtEbitda!=null) bits.push('dette/EBITDA '+it.debtEbitda.toFixed(1));
+  let sc=0,n=0;
+  const chk=(v,good,bad)=>{ if(v!=null){n++; if(v>=good)sc++; else if(v<bad)sc--;} };
+  chk(it.roe,15,5); chk(it.margin,10,3); chk(it.revG,5,0); chk(it.epsG,5,0); chk(it.upside,10,0);
+  let verdict,cls;
+  if(n===0){ verdict='non chiffrés (Euronext) — vérifie via le lien'; cls='faint'; }
+  else if(sc>=2){ verdict='solides \u2713'; cls='good'; }
+  else if(sc<=-1){ verdict='fragiles \u26a0'; cls='bad'; }
+  else { verdict='mitig\u00e9s'; cls='mid'; }
+  return `<div class="funda ${cls}">Fondamentaux : <b>${verdict}</b>${bits.length?' \u00b7 '+bits.join(' \u00b7 '):''}</div>`;
+}
 
 /* ============================================================
    UI plumbing

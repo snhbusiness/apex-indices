@@ -768,7 +768,7 @@ function cardHTML(it,i,a){
   const invURL='https://www.investing.com/search/?q='+encodeURIComponent(it.symbol.replace('.PA','').replace('.AS',''))+' '+encodeURIComponent(it.name||'');
 
   const cascade = a? `
-    <div class="cascade">
+    <div class="cascade open">
       ${c8('1 · Secteur & indice',a.p1_secteur)}
       ${c8('2 · Fondamentaux',a.p2_fondamentaux)}
       ${c8('3 · Momentum & technique',a.p3_momentum)}
@@ -777,7 +777,7 @@ function cardHTML(it,i,a){
       ${c8('6 · Flux & positionnement',a.p6_flux)}
       ${c8('7 · Risque',a.p7_risque)}
       ${c8('8 · Thèse de repricing',a.p8_repricing)}
-    </div>`:'<div class="cascade"><div class="c8" style="color:var(--faint)">Cascade IA non disponible.</div></div>';
+    </div>`:'<div class="cascade open"><div class="c8" style="color:var(--faint)">Cascade IA non disponible — relance Générer (clé Anthropic requise) ou vérifie les « Notes du moteur ».</div></div>';
 
   return `
   <div class="card ${sectorClass}" style="animation-delay:${i*40}ms">

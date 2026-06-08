@@ -406,6 +406,14 @@ function bar(p){$('#barFill').style.width=clamp(p,0,100)+'%'}
 function log(t){$('#plog').textContent=t}
 function status(t){$('#status').textContent=t}
 
+async function ystock(sym){
+  const base=(localStorage.getItem('apexidx_proxy')||'').replace(/\/$/,'');
+  if(!base) throw new Error('proxy absent');
+  const r=await fetch(base+'/api/ystock?symbol='+encodeURIComponent(sym));
+  if(!r.ok) throw new Error('http '+r.status);
+  return await r.json();
+}
+
 async function generate(){
   if(running)return;
   if(!localStorage.getItem('apexidx_proxy') && !cfg.f){openSettings();return toast('Configure le proxy dans le terminal (Paramètres), ou ajoute une clé FMP.')}
@@ -430,6 +438,42 @@ async function generate(){
     log('Scan des cotations (passe légère)…');
     for(const idx of ['cac40','sp500']){
       const list=universe[idx]; if(!list.length)continue;
+
+      /* --- CAC 40 : via Yahoo (FMP ne couvre pas Euronext) — tout en un appel --- */
+      if(idx==='cac40'){
+        log('Scan CAC 40 via Yahoo…'); let n=0;
+        await pool(list, DEEP_CONCURRENCY, async it=>{
+          try{
+            const y=await ystock(it.symbol);
+            if(!y || y.price==null){warnings.push('CAC 40 : '+it.symbol+' indisponible (Yahoo).');return;}
+            it.price=y.price; it.chg=y.changePct; it.mcap=y.marketCap; it.pe=y.pe; if(y.name)it.name=y.name;
+            it.pb=y.pb;
+            it.roe=(y.roe!=null&&Math.abs(y.roe)<=3)?y.roe*100:y.roe;
+            it.margin=(y.margin!=null&&Math.abs(y.margin)<=3)?y.margin*100:y.margin;
+            it.evEbitda=y.evEbitda;
+            it.revG=(y.revG!=null&&Math.abs(y.revG)<=5)?y.revG*100:y.revG;
+            it.epsG=(y.epsG!=null&&Math.abs(y.epsG)<=5)?y.epsG*100:y.epsG;
+            it.target=y.target;
+            it.upside=(y.upside!=null)?y.upside:((y.target&&y.price)?(y.target/y.price-1)*100:null);
+            if(y.recoMean!=null){ it.consScore=clamp((5-y.recoMean)/4*100,0,100); it.consTot=y.numAnalysts||null;
+              it.consLabel= it.consScore>=75?'Achat fort': it.consScore>=60?'Achat': it.consScore>=45?'Conserver':'Vendre'; }
+            const bars=(y.candles||[]).map(b=>({close:num(b.close),high:num(b.high),low:num(b.low)})).filter(b=>b.close!=null);
+            const closes=bars.map(b=>b.close);
+            it.rsi=rsi(closes); it.atr=atr(bars);
+            it.p1m=perf(closes,21); it.p3m=perf(closes,63); it.p6m=perf(closes,126);
+            if(closes.length>=50)it.ma50=avg(closes.slice(0,50));
+            if(closes.length>=200)it.ma200=avg(closes.slice(0,200));
+            if(bars.length){ it.yHigh=Math.max(...bars.map(b=>b.high)); it.yLow=Math.min(...bars.map(b=>b.low)); }
+            const have=['roe','margin','epsG','rsi','target'].filter(k=>it[k]!=null).length;
+            it.dataConf= have>=4?'high':have>=2?'mid':'low';
+            n++; if(n%4===0){log('CAC '+n+'/'+list.length); bar(12+8*n/list.length);}
+          }catch(e){warnings.push('CAC 40 : '+it.symbol+' erreur Yahoo ('+e.message+').');}
+        });
+        universe[idx]=list.filter(it=>it.price!=null);
+        continue;
+      }
+
+      /* --- S&P 500 : via FMP (cotations groupées) --- */
       const syms=list.map(x=>x.symbol);
       const quotes={};
       for(let i=0;i<syms.length;i+=QUOTE_CHUNK){
@@ -490,6 +534,7 @@ async function generate(){
     log(`Analyse profonde de ${allDeep.length} candidats…`);
     let done=0;
     await pool(allDeep, DEEP_CONCURRENCY, async it=>{
+      if(it.index==='cac40'){ done++; return; }   // déjà enrichi via Yahoo (FMP ne couvre pas Euronext)
       const [rat,km,gro,ptc,grc,earn,hist]=await Promise.all([
         fmp('/ratios-ttm',{symbol:it.symbol}).catch(()=>null),
         fmp('/key-metrics-ttm',{symbol:it.symbol}).catch(()=>null),

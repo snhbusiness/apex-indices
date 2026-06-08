@@ -345,11 +345,22 @@ async def _yfund_client():
         _YC["client"] = httpx.AsyncClient(headers=YH_HEADERS, timeout=15, follow_redirects=True)
     cl = _YC["client"]
     if (not _YC["crumb"]) or (time.time() - _YC["ts"] > 1800):
+        crumb = ""
         try:
-            await cl.get("https://finance.yahoo.com/")   # pose les cookies (A1/A3) dans le jar
+            r = await cl.get("https://finance.yahoo.com/")
+            # Mur de consentement RGPD (serveur en Europe) : on accepte pour décrocher le cookie A1
+            if "consent" in str(r.url):
+                html = r.text
+                csrf = re.search(r'name="csrfToken"[^>]*value="([^"]+)"', html) or re.search(r'csrfToken=([^&"]+)', str(r.url))
+                sess = re.search(r'name="sessionId"[^>]*value="([^"]+)"', html) or re.search(r'sessionId=([^&"]+)', str(r.url))
+                if csrf and sess:
+                    await cl.post("https://consent.yahoo.com/v2/collectConsent",
+                                  data=[("agree", "agree"), ("consentUUID", "default"),
+                                        ("sessionId", sess.group(1)), ("csrfToken", csrf.group(1)),
+                                        ("originalDoneUrl", "https://finance.yahoo.com/"), ("namespace", "yahoo")])
+                    await cl.get("https://finance.yahoo.com/")
         except Exception:
             pass
-        crumb = ""
         for host in ("query2", "query1"):
             try:
                 r = await cl.get(f"https://{host}.finance.yahoo.com/v1/test/getcrumb")
